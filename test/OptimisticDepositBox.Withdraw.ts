@@ -52,12 +52,38 @@ describe("Optimistic Deposit Box Withdraw functions", function () {
     const requestTimestamp = await optimisticDepositBox.connect(deployer).getCurrentTime();
     await timer.setCurrentTime(Number(await timer.getCurrentTime()) + proposalLiveness + 1);
 
+    expect(await optimisticDepositBox.totalOptimisticDepositBoxCollateral()).to.equal(amountToDeposit);
+    expect(await optimisticDepositBox.getCollateral(depositor.address)).to.equal(amountToDeposit);
+
     // now that the time is past the liveness period, the depositor is able to execute withdraw
     await optimisticDepositBox.connect(depositor).executeWithdrawal();
+
+    expect(await optimisticDepositBox.totalOptimisticDepositBoxCollateral()).to.equal(
+      amountToDeposit.sub(amountToWithdraw)
+    );
+    expect(await optimisticDepositBox.getCollateral(depositor.address)).to.equal(amountToDeposit.sub(amountToWithdraw));
 
     // now that a withdrawal has been executed, the optimistic oracle returns a price
     expect(
       await optimisticOracle.hasPrice(optimisticDepositBox.address, identifier, requestTimestamp, zeroBytes)
     ).to.equal(true);
+  });
+  it("Execute withdraw before liveness period is complete", async function () {
+    // A withdraw can't be executed until after the liveness period is complete
+    await expect(optimisticDepositBox.connect(depositor).executeWithdrawal()).to.be.revertedWith(
+      "Unresolved oracle price"
+    );
+  });
+  it("Cancel Withdraw after a request has been made", async function () {
+    // Tests the cancelWithdrawal method to cancel a withdraw
+    await optimisticDepositBox.connect(depositor).cancelWithdrawal();
+  });
+  it("Contract checks the withdrawalRequestTimestamp is before the currentTimestamp", async function () {
+    const requestTimestamp = await optimisticDepositBox.connect(deployer).getCurrentTime();
+    await timer.setCurrentTime(requestTimestamp - 1);
+
+    await expect(optimisticDepositBox.connect(depositor).executeWithdrawal()).to.be.revertedWith(
+      "Invalid withdraw request"
+    );
   });
 });

@@ -20,6 +20,8 @@ describe("Optimistic Deposit Box Deposit functions", function () {
     await usdc.connect(depositor).approve(optimisticDepositBox.address, amountToSeedWallets);
   });
   it("Depositing ERC20 tokens correctly pulls tokens and changes contract state", async function () {
+    expect(await optimisticDepositBox.totalOptimisticDepositBoxCollateral()).to.equal(0);
+
     // Deposits ERC20 tokens into the Optimistic Deposit Box contract
     await expect(optimisticDepositBox.connect(depositor).deposit(amountToDeposit))
       .to.emit(optimisticDepositBox, "Deposit")
@@ -32,5 +34,9 @@ describe("Optimistic Deposit Box Deposit functions", function () {
     // getCollateral for user should equal deposit amount.
     expect(await optimisticDepositBox.getCollateral(depositor.address)).to.equal(amountToDeposit);
     expect(await optimisticDepositBox.totalOptimisticDepositBoxCollateral()).to.equal(amountToDeposit);
+  });
+  it("Deposits a denominated collateral amount of 0", async function () {
+    // collateral deposit amount should be above 0
+    await expect(optimisticDepositBox.connect(depositor).deposit("0")).to.be.revertedWith("Invalid collateral amount");
   });
 });

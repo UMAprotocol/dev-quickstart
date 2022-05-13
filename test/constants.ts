@@ -6,7 +6,7 @@ export const amountToSeedWallets = toWei("1500");
 
 export const amountToDeposit = toWei("100");
 
-export const amountToWithdraw = toWei("1");
+export const amountToWithdraw = toWei("10");
 
 export const proposalLiveness = 7200;
 

@@ -37,4 +37,16 @@ describe("Optimistic Deposit Box Request functions", function () {
       await optimisticOracle.hasPrice(optimisticDepositBox.address, identifier, requestTimestamp, zeroBytes)
     ).to.equal(false);
   });
+  it("Requests a denominated collateral amount of 0", async function () {
+    // collateral deposit amount should be above 0
+    await expect(optimisticDepositBox.connect(depositor).requestWithdrawal("0")).to.be.revertedWith(
+      "Invalid collateral amount"
+    );
+  });
+  it("cancelWithdrawal is called without a pending withdrawal", async function () {
+    // Contract checks for a pending withdrawal request.
+    await expect(optimisticDepositBox.connect(depositor).cancelWithdrawal()).to.be.revertedWith(
+      "No pending withdrawal"
+    );
+  });
 });
