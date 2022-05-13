@@ -2,6 +2,10 @@
 
 This repo is intended to have scripts and tests available to allow for testing UMA contracts. The repo uses the `OptimisticDepositBox` contract as an example.
 
+## Install dependencies
+
+You will need to install the long-term support version of nodejs, currently nodejs v14 or v16. You will also need to install yarn.
+
 ## Build
 
 ```shell
