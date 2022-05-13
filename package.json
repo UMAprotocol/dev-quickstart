@@ -5,7 +5,7 @@
   "license": "AGPL-3.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/UMAprotocol.git"
+    "url": "git+https://github.com/UMAprotocol/dev-quickstart.git"
   },
   "files": [
     "/contracts/**/*.sol",
