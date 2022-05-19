@@ -12,14 +12,15 @@ describe("Optimistic Deposit Box Deposit functions", function () {
     ({ collateralWhitelist } = await umaEcosystemFixture());
     ({ optimisticDepositBox, usdc } = await optimisticDepositBoxFixture());
 
-    // Approve usdc to be whitelisted collateral.
-    await collateralWhitelist.connect(deployer).isOnWhitelist(usdc.address);
     // mint some fresh tokens for the depositor.
     await usdc.connect(deployer).mint(depositor.address, amountToSeedWallets);
     // Approve the OptimisticDepositBox to spend tokens
     await usdc.connect(depositor).approve(optimisticDepositBox.address, amountToSeedWallets);
   });
   it("Depositing ERC20 tokens correctly pulls tokens and changes contract state", async function () {
+    // Confirms usdc is whitelisted collateral.
+    expect(await collateralWhitelist.connect(deployer).isOnWhitelist(usdc.address)).to.equal(true);
+
     expect(await optimisticDepositBox.totalOptimisticDepositBoxCollateral()).to.equal(0);
 
     // Deposits ERC20 tokens into the Optimistic Deposit Box contract

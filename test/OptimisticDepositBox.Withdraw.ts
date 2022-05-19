@@ -11,21 +11,15 @@ import {
   identifier,
 } from "./constants";
 
-let optimisticDepositBox: Contract,
-  usdc: Contract,
-  timer: Contract,
-  optimisticOracle: Contract,
-  collateralWhitelist: Contract;
+let optimisticDepositBox: Contract, usdc: Contract, timer: Contract, optimisticOracle: Contract;
 let deployer: SignerWithAddress, depositor: SignerWithAddress, proposer: SignerWithAddress;
 
 describe("Optimistic Deposit Box Withdraw functions", function () {
   beforeEach(async function () {
     [deployer, depositor, proposer] = await ethers.getSigners();
-    ({ timer, optimisticOracle, collateralWhitelist } = await umaEcosystemFixture());
+    ({ timer, optimisticOracle } = await umaEcosystemFixture());
     ({ optimisticDepositBox, usdc } = await optimisticDepositBoxFixture());
 
-    // Approve usdc to be whitelisted collateral.
-    await collateralWhitelist.connect(deployer).isOnWhitelist(usdc.address);
     // mint some fresh tokens for the depositor.
     await usdc.connect(deployer).mint(depositor.address, amountToSeedWallets);
     // Approve the OptimisticDepositBox to spend tokens
