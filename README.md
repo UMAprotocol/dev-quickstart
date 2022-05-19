@@ -28,15 +28,7 @@ yarn lint-fix
 
 ## Deploying your contracts
 
-To deploy the entire UMA system on a network of your choice (the below uses kovan as an example):
-
-```sh
-export MNEMONIC="Your 12-word phrase here"
-export CUSTOM_NODE_URL="Your node url here"
-yarn hardhat deploy --network kovan
-```
-
-Use the command below to deploy a particular contract (along with any dependencies that haven't been deployed on this network). In the deploy script, the `func.tags` determines the contracts to deploy which is specified using the --tags arg in the command. The `func.dependencies` in the deploy script determines the dependencies that will be deployed:
+Use the command below to deploy a particular contract (along with any dependencies that haven't been deployed on this network). In the deploy script, the `func.tags` determines the contracts to deploy which is specified using the `--tags` arg in the command:
 
 ```sh
 export MNEMONIC="Your 12-word phrase here"
