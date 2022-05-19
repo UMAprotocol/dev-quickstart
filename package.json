@@ -1,6 +1,6 @@
 {
-  "name": "uma-developer-quickstart",
-  "version": "0.0.44",
+  "name": "oo-developer-quickstart",
+  "version": "1.0.0",
   "author": "UMA Team",
   "license": "AGPL-3.0",
   "repository": {
@@ -15,24 +15,15 @@
   "types": "dist/index.d.ts",
   "main": "dist/index.js",
   "scripts": {
-    "lint-contracts": "yarn solhint ./contracts/**/*.sol",
     "lint": "yarn prettier --list-different",
     "lint-fix": "yarn prettier --write",
     "prettier": "prettier .",
-    "build": "hardhat compile && tsc && rsync -a --include '*/' --include '*.d.ts' --exclude '*' ./typechain ./dist/",
-    "test": "hardhat test",
-    "test:report-gas": "REPORT_GAS=true hardhat test",
-    "test:gas-analytics": "GAS_TEST_ENABLED=true hardhat test ./test/gas-analytics/*",
-    "test:all": "GAS_TEST_ENABLED=true REPORT_GAS=true yarn hardhat test",
-    "generate-contract-types": "rm -rf typechain && TYPECHAIN=ethers yarn hardhat typechain",
-    "prepublish": "yarn build && hardhat export --export-all ./cache/massExport.json && ts-node ./scripts/processHardhatExport.ts && prettier --write ./deployments/deployments.json && yarn generate-contract-types"
+    "test": "hardhat test"
   },
   "dependencies": {
-    "@defi-wonderland/smock": "^2.0.7",
     "@openzeppelin/contracts": "^4.4.2",
     "@uma/common": "^2.17.0",
-    "@uma/contracts-node": "^0.2.0",
-    "@uma/core": "^2.24.0"
+    "@uma/contracts-node": "^0.2.0"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.5",
@@ -59,12 +50,10 @@
     "ethers": "^5.5.4",
     "hardhat": "^2.9.1",
     "hardhat-deploy": "^0.10.5",
-    "hardhat-gas-reporter": "^1.0.8",
     "husky": "^4.2.3",
     "prettier": "^2.3.2",
     "prettier-plugin-solidity": "^1.0.0-beta.13",
     "pretty-quick": "^2.0.1",
-    "solhint": "^3.3.6",
     "solidity-coverage": "^0.7.16",
     "ts-node": "^10.1.0",
     "typechain": "^5.1.2",
@@ -74,9 +63,5 @@
     "hooks": {
       "pre-commit": "echo '🏃‍♂️ Running pretty-quick on staged files' && pretty-quick --staged"
     }
-  },
-  "publishConfig": {
-    "registry": "https://registry.npmjs.com/",
-    "access": "public"
   }
 }

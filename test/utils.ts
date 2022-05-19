@@ -1,10 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { expect } from "chai";
-import * as chai from "chai";
 import { getBytecode, getAbi } from "@uma/contracts-node";
-import { smock, FakeContract } from "@defi-wonderland/smock";
-chai.use(smock.matchers);
 import hre from "hardhat";
 import { ethers } from "hardhat";
 import { BigNumber, Signer, Contract, ContractFactory } from "ethers";
@@ -73,70 +70,6 @@ export function getAllFilesInPath(dirPath: string, arrayOfFiles: string[] = []):
 
 export const toWei = (num: string | number | BigNumber) => ethers.utils.parseEther(num.toString());
 
-export const toWeiWithDecimals = (num: string | number | BigNumber, decimals: number) =>
-  ethers.utils.parseUnits(num.toString(), decimals);
-
-export const toBNWei = (num: string | number | BigNumber) => BigNumber.from(toWei(num));
-
-export const toBNWeiWithDecimals = (num: string | number | BigNumber, decimals: number) =>
-  BigNumber.from(toWeiWithDecimals(num, decimals));
-
-export const fromWei = (num: string | number | BigNumber) => ethers.utils.formatUnits(num.toString());
-
-export const toBN = (num: string | number | BigNumber) => {
-  // If the string version of the num contains a `.` then it is a number which needs to be parsed to a string int.
-  if (num.toString().includes(".")) return BigNumber.from(parseInt(num.toString()));
-  return BigNumber.from(num.toString());
-};
-
 export const utf8ToHex = (input: string) => ethers.utils.formatBytes32String(input);
 
-export const hexToUtf8 = (input: string) => ethers.utils.toUtf8String(input);
-
-export const createRandomBytes32 = () => ethers.utils.hexlify(ethers.utils.randomBytes(32));
-
-export async function seedWallet(
-  walletToFund: Signer,
-  tokens: Contract[],
-  weth: Contract | undefined,
-  amountToSeedWith: number | BigNumber
-) {
-  for (const token of tokens) await token.mint(await walletToFund.getAddress(), amountToSeedWith);
-
-  if (weth) await weth.connect(walletToFund).deposit({ value: amountToSeedWith });
-}
-
-export async function seedContract(
-  contract: Contract,
-  walletToFund: Signer,
-  tokens: Contract[],
-  weth: Contract | undefined,
-  amountToSeedWith: number | BigNumber
-) {
-  await seedWallet(walletToFund, tokens, weth, amountToSeedWith);
-  for (const token of tokens) await token.connect(walletToFund).transfer(contract.address, amountToSeedWith);
-  if (weth) await weth.connect(walletToFund).transfer(contract.address, amountToSeedWith);
-}
-
-export function randomBigNumber(bytes = 31) {
-  return ethers.BigNumber.from(ethers.utils.randomBytes(bytes));
-}
-
-export function randomAddress() {
-  return ethers.utils.getAddress(ethers.utils.hexlify(ethers.utils.randomBytes(20)));
-}
-
-export async function getParamType(contractName: string, functionName: string, paramName: string) {
-  const contractFactory = await getContractFactory(contractName, new ethers.VoidSigner(ethers.constants.AddressZero));
-  const fragment = contractFactory.interface.fragments.find((fragment) => fragment.name === functionName);
-  return fragment!.inputs.find((input) => input.name === paramName) || "";
-}
-
-export async function createFake(contractName: string, targetAddress: string = "") {
-  const contractFactory = await getContractFactory(contractName, new ethers.VoidSigner(ethers.constants.AddressZero));
-  return targetAddress != "" ? smock.fake(contractFactory, { address: targetAddress }) : smock.fake(contractFactory);
-}
-
-const { defaultAbiCoder, keccak256 } = ethers.utils;
-
-export { expect, Contract, ethers, hre, BigNumber, defaultAbiCoder, keccak256, FakeContract, Signer };
+export { expect, Contract, ethers, hre, BigNumber, Signer };
