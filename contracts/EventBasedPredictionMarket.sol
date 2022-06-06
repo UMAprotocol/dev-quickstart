@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.0;
 
-import "hardhat/console.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import "@uma/core/contracts/common/implementation/Testable.sol";
-import "@uma/core/contracts/common/implementation/Lockable.sol";
 import "@uma/core/contracts/common/implementation/ExpandedERC20.sol";
 import "@uma/core/contracts/common/implementation/FixedPoint.sol";
+import "@uma/core/contracts/common/implementation/Lockable.sol";
+import "@uma/core/contracts/common/implementation/Testable.sol";
+import "@uma/core/contracts/oracle/implementation/Constants.sol";
 
+import "@uma/core/contracts/common/interfaces/ExpandedIERC20.sol";
 import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
 import "@uma/core/contracts/oracle/interfaces/OptimisticOracleInterface.sol";
-import "@uma/core/contracts/common/interfaces/ExpandedIERC20.sol";
-import "@uma/core/contracts/oracle/implementation/Constants.sol";
+
 import "@uma/core/contracts/financial-templates/common/financial-product-libraries/long-short-pair-libraries/BinaryOptionLongShortPairFinancialProductLibrary.sol";
 
 // TODO use OptimisticOracleInterface from @uma/core once it's updated with setEventBased
@@ -35,6 +35,18 @@ contract EventBasedPredictionMarket is Testable, Lockable {
      *  EVENT BASED PREDICTION MARKET DATA STRUCTURES  *
      *************************************/
 
+    // Define the contract's constructor parameters as a struct to enable more variables to be specified.
+    struct ConstructorParams {
+        string pairName;
+        bytes32 priceIdentifier; // Price identifier, registered in the DVM for the long short pair.
+        IERC20 collateralToken; // Collateral token used to back LSP synthetics.
+        BinaryOptionLongShortPairFinancialProductLibrary financialProductLibrary; // Contract providing settlement payout logic.
+        bytes customAncillaryData; // Custom ancillary data to be passed along with the price request to the OO.
+        FinderInterface finder; // DVM finder to find other UMA ecosystem contracts.
+        address timerAddress; // Timer used to synchronize contract time in testing. Set to 0x000... in production.
+    }
+
+    bool public priceRequested;
     bool public receivedSettlementPrice;
 
     uint256 public expirationTimestamp;
@@ -58,9 +70,9 @@ contract EventBasedPredictionMarket is Testable, Lockable {
 
     // Optimistic oracle customization parameters.
     bytes public customAncillaryData;
-    uint256 public proposerReward = 10;
-    uint256 public optimisticOracleLivenessTime = 60;
-    uint256 public optimisticOracleProposerBond = 100;
+    uint256 public proposerReward = 10 ether;
+    uint256 public optimisticOracleLivenessTime = 3600; // 1 hour
+    uint256 public optimisticOracleProposerBond = 500 ether;
 
     /****************************************
      *                EVENTS                *
@@ -77,38 +89,38 @@ contract EventBasedPredictionMarket is Testable, Lockable {
     modifier hasPrice() {
         require(
             _getOptimisticOracle().hasPrice(address(this), priceIdentifier, expirationTimestamp, customAncillaryData),
-            "Only callable if the optimistic oracle has a price for this identifier."
+            "Doesn't have price."
         );
         _;
     }
 
-    modifier priceRequested() {
-        require(
-            _getOptimisticOracle().getState(address(this), priceIdentifier, expirationTimestamp, customAncillaryData) >
-                OptimisticOracleInterface.State.Invalid,
-            "Price not requested"
-        );
+    modifier requestInitialized() {
+        require(priceRequested, "Price not requested");
         _;
     }
 
-    // Define the contract's constructor parameters as a struct to enable more variables to be specified.
-    struct ConstructorParams {
-        string pairName;
-        bytes32 priceIdentifier; // Price identifier, registered in the DVM for the long short pair.
-        IERC20 collateralToken; // Collateral token used to back LSP synthetics.
-        BinaryOptionLongShortPairFinancialProductLibrary financialProductLibrary; // Contract providing settlement payout logic.
-        bytes customAncillaryData; // Custom ancillary data to be passed along with the price request to the OO.
-        FinderInterface finder; // DVM finder to find other UMA ecosystem contracts.
-        address timerAddress; // Timer used to synchronize contract time in testing. Set to 0x000... in production.
-    }
-
+    /**
+     * @notice Construct the EventBasedPredictionMarket
+     * @param params Constructor params used to initialize the LSP. Key-valued object with the following structure:
+     *    - `pairName`: Name of the long short pair tokens created for the prediction market.
+     *    - `priceIdentifier`: Price identifier, registered in the DVM for the long short pair.
+     *    - `collateralToken`: Collateral token used to back LSP synthetics.
+     *    - `financialProductLibrary`: Contract providing settlement payout logic.
+     *    - `customAncillaryData`: Custom ancillary data to be passed along with the price request to the OO.
+     *    - `finder`: DVM finder to find other UMA ecosystem contracts.
+     *    - `timerAddress`: Timer used to synchronize contract time in testing. Set to 0x000... in production.
+     */
     constructor(ConstructorParams memory params) Testable(params.timerAddress) {
         expirationTimestamp = getCurrentTime(); // Set the request timestamp to the current block timestamp.
 
+        // Holding long tokens gives the owner exposure to the long position,
+        // i.e. the case where the answer to the prediction market question is YES.
         longToken = new ExpandedERC20(string(abi.encodePacked(params.pairName, " Long Token")), "PLT", 18);
+        // Holding short tokens gives the owner exposure to the short position,
+        // i.e. the case where the answer to the prediction market question is NO.
         shortToken = new ExpandedERC20(string(abi.encodePacked(params.pairName, " Short Token")), "PST", 18);
 
-        // Add burner and minter roles to the long and short tokens.
+        // Add burner and minter required roles to the long and short tokens.
         longToken.addMinter(address(this));
         shortToken.addMinter(address(this));
         longToken.addBurner(address(this));
@@ -126,23 +138,24 @@ contract EventBasedPredictionMarket is Testable, Lockable {
     // Requests the price from the optimistic oracle
     // The caller must have sufficient balance to pay the proposer reward and approve the contract to spend the collateral.
     function initializeMarket() public {
-        _requestOraclePrice(customAncillaryData);
+        // If the proposer reward was set then pull it from the caller of the function.
+        if (proposerReward > 0) {
+            collateralToken.safeTransferFrom(msg.sender, address(this), proposerReward);
+        }
+        _requestOraclePrice();
     }
 
     // Request a price in the optimistic oracle for a given request timestamp and ancillary data combo. Set the bonds
     // accordingly to the deployer's parameters. Will revert if re-requesting for a previously requested combo.
-    function _requestOraclePrice(bytes memory requestAncillaryData) internal {
+    function _requestOraclePrice() internal {
         OptimisticOracleInterface optimisticOracle = _getOptimisticOracle();
 
-        // If the proposer reward was set then pull it from the caller of the function.
-        if (proposerReward > 0) {
-            collateralToken.safeTransferFrom(msg.sender, address(this), proposerReward);
-            collateralToken.safeApprove(address(optimisticOracle), proposerReward);
-        }
+        collateralToken.safeApprove(address(optimisticOracle), proposerReward);
+
         optimisticOracle.requestPrice(
             priceIdentifier,
             expirationTimestamp,
-            requestAncillaryData,
+            customAncillaryData,
             collateralToken,
             proposerReward
         );
@@ -151,7 +164,7 @@ contract EventBasedPredictionMarket is Testable, Lockable {
         optimisticOracle.setCustomLiveness(
             priceIdentifier,
             expirationTimestamp,
-            requestAncillaryData,
+            customAncillaryData,
             optimisticOracleLivenessTime
         );
 
@@ -159,7 +172,7 @@ contract EventBasedPredictionMarket is Testable, Lockable {
         optimisticOracle.setBond(
             priceIdentifier,
             expirationTimestamp,
-            requestAncillaryData,
+            customAncillaryData,
             optimisticOracleProposerBond
         );
 
@@ -167,8 +180,33 @@ contract EventBasedPredictionMarket is Testable, Lockable {
         OptimisticOracleInterfaceEventBased(address(optimisticOracle)).setEventBased(
             priceIdentifier,
             expirationTimestamp,
-            requestAncillaryData
+            customAncillaryData
         );
+
+        priceRequested = true;
+    }
+
+    // Callback function called by the optimistic oracle when a price requested
+    // by this contract is disputed.
+    function priceDisputed(
+        bytes32 identifier,
+        uint256 timestamp,
+        bytes memory ancillaryData,
+        uint256 refund
+    ) external {
+        OptimisticOracleInterface optimisticOracle = _getOptimisticOracle();
+        require(msg.sender == address(optimisticOracle), "not authorized");
+
+        expirationTimestamp = getCurrentTime();
+        require(timestamp <= expirationTimestamp, "dispute and request must have different timestamps");
+        require(identifier == priceIdentifier, "dispute and request must have the same identifier");
+        require(
+            keccak256(ancillaryData) == keccak256(customAncillaryData),
+            "dispute and request must have the same ancillary data"
+        );
+        require(refund == proposerReward, "dispute and request must have the same proposerReward amount");
+
+        _requestOraclePrice();
     }
 
     /****************************************
@@ -182,7 +220,11 @@ contract EventBasedPredictionMarket is Testable, Lockable {
      * @param tokensToCreate number of long and short synthetic tokens to create.
      * @return collateralUsed total collateral used to mint the synthetics.
      */
-    function create(uint256 tokensToCreate) public priceRequested nonReentrant returns (uint256 collateralUsed) {
+    function create(uint256 tokensToCreate) public requestInitialized nonReentrant returns (uint256 collateralUsed) {
+        require(
+            !_getOptimisticOracle().hasPrice(address(this), priceIdentifier, expirationTimestamp, customAncillaryData),
+            "Price already proposed."
+        );
         // Note the use of mulCeil to prevent small collateralPerPair causing rounding of collateralUsed to 0 enabling
         // callers to mint dust LSP tokens without paying any collateral.
         collateralUsed = FixedPoint.Unsigned(tokensToCreate).mulCeil(FixedPoint.Unsigned(collateralPerPair)).rawValue;
@@ -271,8 +313,7 @@ contract EventBasedPredictionMarket is Testable, Lockable {
     }
 
     // Fetch the optimistic oracle expiration price. If the oracle has the price for the provided expiration timestamp
-    // and customData combo then return this. Else, try fetch the price on the early expiration ancillary data. If
-    // there is no price for either, revert. If the early expiration price is the ignore price will also revert.
+    // and customData combo then return this. If there is no price revert.
     function getExpirationPrice() internal hasPrice {
         expiryPrice = _getOraclePrice(expirationTimestamp, customAncillaryData);
 
