@@ -53,7 +53,7 @@ describe("EventBasedPredictionMarket functions", function () {
     await eventBasedPredictionMarket.connect(deployer).initializeMarket();
   });
 
-  it("Event-based mint, redeem and expire lifecycle", async function () {
+  it("Event-based mint, redeem and expire lifecycle.", async function () {
     // Create some sponsor tokens. Send half to the holder account.
     expect(await usdc.balanceOf(sponsor.address)).to.equal(amountToSeedWallets);
     expect(await longToken.balanceOf(sponsor.address)).to.equal(0);
@@ -109,6 +109,39 @@ describe("EventBasedPredictionMarket functions", function () {
 
     // long short pair should have no collateral left in it as everything has been redeemed.
     expect(await usdc.balanceOf(eventBasedPredictionMarket.address)).to.equal(0);
+  });
+
+  it("EventBasedPredictionMarket lifecycle events.", async function () {
+    await eventBasedPredictionMarket.connect(sponsor).create(toWei(100));
+
+    const createEvents = await eventBasedPredictionMarket.queryFilter(
+      eventBasedPredictionMarket.filters.TokensCreated(),
+      "latest"
+    );
+    expect(createEvents[0].args.sponsor === sponsor.address);
+
+    // Send half the long tokens to the holder. This would happen by the holder buying them on a dex.
+    await longToken.connect(sponsor).transfer(holder.address, toWei("50"));
+
+    // Token sponsor redeems half their remaining long tokens, along with the associated short tokens.
+    await eventBasedPredictionMarket.connect(sponsor).redeem(toWei("25"));
+
+    const tokensRedeemedEvents = await eventBasedPredictionMarket.queryFilter(
+      eventBasedPredictionMarket.filters.TokensRedeemed(),
+      "latest"
+    );
+    expect(tokensRedeemedEvents[0].args.sponsor === sponsor.address);
+
+    await proposeAndSettleOptimisticOraclePrice(toWei(1));
+
+    // Holder redeems his long tokens.
+    await eventBasedPredictionMarket.connect(holder).settle(toWei("50"), 0);
+
+    const positionSettledEvents = await eventBasedPredictionMarket.queryFilter(
+      eventBasedPredictionMarket.filters.PositionSettled(),
+      "latest"
+    );
+    expect(positionSettledEvents[0].args.sponsor === holder.address);
   });
 
   it("Event-based dispute workflow with auto re-request on dispute.", async function () {
