@@ -1,6 +1,7 @@
 import { getContractFactory, utf8ToHex, hre } from "../utils";
 import { proposalLiveness, zeroRawValue, identifier } from "../constants";
 import { interfaceName } from "@uma/common";
+import { OptimisticOracle } from "@uma/contracts-node/dist/packages/contracts-node/typechain/core/ethers";
 
 export const umaEcosystemFixture = hre.deployments.createFixture(async ({ ethers }) => {
   const [deployer] = await ethers.getSigners();
@@ -14,9 +15,9 @@ export const umaEcosystemFixture = hre.deployments.createFixture(async ({ ethers
   const mockOracle = await (
     await getContractFactory("MockOracleAncillary", deployer)
   ).deploy(finder.address, timer.address);
-  const optimisticOracle = await (
+  const optimisticOracle = (await (
     await getContractFactory("OptimisticOracle", deployer)
-  ).deploy(proposalLiveness, finder.address, timer.address);
+  ).deploy(proposalLiveness, finder.address, timer.address)) as OptimisticOracle;
 
   // Set all the contracts within the finder.
   await finder.changeImplementationAddress(utf8ToHex(interfaceName.CollateralWhitelist), collateralWhitelist.address);

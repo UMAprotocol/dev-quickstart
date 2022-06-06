@@ -16,7 +16,7 @@ import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
 import "@uma/core/contracts/oracle/interfaces/OptimisticOracleInterface.sol";
 import "@uma/core/contracts/common/interfaces/ExpandedIERC20.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
-import "@uma/core/contracts/financial-templates/common/financial-product-libraries/long-short-pair-libraries/LongShortPairFinancialProductLibrary.sol";
+import "@uma/core/contracts/financial-templates/common/financial-product-libraries/long-short-pair-libraries/BinaryOptionLongShortPairFinancialProductLibrary.sol";
 
 // TODO use OptimisticOracleInterface from @uma/core once it's updated with setEventBased
 interface OptimisticOracleInterfaceEventBased {
@@ -54,7 +54,7 @@ contract EventBasedPredictionMarket is Testable, Lockable {
     ExpandedIERC20 public longToken;
     ExpandedIERC20 public shortToken;
     FinderInterface public finder;
-    LongShortPairFinancialProductLibrary public financialProductLibrary;
+    BinaryOptionLongShortPairFinancialProductLibrary public financialProductLibrary;
 
     // Optimistic oracle customization parameters.
     bytes public customAncillaryData;
@@ -96,7 +96,7 @@ contract EventBasedPredictionMarket is Testable, Lockable {
         string pairName;
         bytes32 priceIdentifier; // Price identifier, registered in the DVM for the long short pair.
         IERC20 collateralToken; // Collateral token used to back LSP synthetics.
-        LongShortPairFinancialProductLibrary financialProductLibrary; // Contract providing settlement payout logic.
+        BinaryOptionLongShortPairFinancialProductLibrary financialProductLibrary; // Contract providing settlement payout logic.
         bytes customAncillaryData; // Custom ancillary data to be passed along with the price request to the OO.
         FinderInterface finder; // DVM finder to find other UMA ecosystem contracts.
         address timerAddress; // Timer used to synchronize contract time in testing. Set to 0x000... in production.
@@ -107,6 +107,12 @@ contract EventBasedPredictionMarket is Testable, Lockable {
 
         longToken = new ExpandedERC20(string(abi.encodePacked(params.pairName, " Long Token")), "PLT", 18);
         shortToken = new ExpandedERC20(string(abi.encodePacked(params.pairName, " Short Token")), "PST", 18);
+
+        // Add burner and minter roles to the long and short tokens.
+        longToken.addMinter(address(this));
+        shortToken.addMinter(address(this));
+        longToken.addBurner(address(this));
+        shortToken.addBurner(address(this));
 
         finder = params.finder;
 

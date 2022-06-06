@@ -1,5 +1,7 @@
+import { BinaryOptionLongShortPairFinancialProductLibrary } from "@uma/contracts-node/dist/packages/contracts-node/typechain/core/ethers";
 import hre from "hardhat";
 import Web3 from "web3";
+import { EventBasedPredictionMarket, ExpandedERC20 } from "../../typechain";
 import { identifier, TokenRolesEnum } from "../constants";
 import { getContractFactory } from "../utils";
 import { umaEcosystemFixture } from "./UmaEcosystem.Fixture";
@@ -23,24 +25,43 @@ export async function deployEventBasedPredictionMarket(ethers: any) {
   // Sets collateral as approved in the UMA collateralWhitelist.
   await parentFixture.collateralWhitelist.addToWhitelist(usdc.address);
 
-  const longShortPairFinancialProjectLibraryTest = await (
-    await getContractFactory("LongShortPairFinancialProjectLibraryTest", deployer)
-  ).deploy();
+  const financialProductLibrary = (await (
+    await getContractFactory("BinaryOptionLongShortPairFinancialProductLibrary", deployer)
+  ).deploy()) as BinaryOptionLongShortPairFinancialProductLibrary;
 
   const constructorParams = {
     pairName: "will it rain today?",
     priceIdentifier: identifier,
     collateralToken: usdc.address,
-    financialProductLibrary: longShortPairFinancialProjectLibraryTest.address,
+    financialProductLibrary: financialProductLibrary.address,
     customAncillaryData: utf8ToHex("some-address-field:0x1234"),
     finder: parentFixture.finder.address,
     timerAddress: parentFixture.timer.address,
   };
 
   // Deploy the EventBasedPredictionMarket contract.
-  const eventBasedPredictionMarket = await (
+  const eventBasedPredictionMarket = (await (
     await getContractFactory("EventBasedPredictionMarket", deployer)
-  ).deploy(constructorParams);
+  ).deploy(constructorParams)) as EventBasedPredictionMarket;
 
-  return { ...parentFixture, usdc, eventBasedPredictionMarket, deployer };
+  // Set long short pair parameters in the financial product library
+  await financialProductLibrary.setLongShortPairParameters(eventBasedPredictionMarket.address, 1);
+
+  // connect to existing ExpandedERC20 contract with ether
+  const longToken = (await (
+    await getContractFactory("ExpandedERC20", deployer)
+  ).attach(await eventBasedPredictionMarket.longToken())) as ExpandedERC20;
+  const shortToken = (await (
+    await getContractFactory("ExpandedERC20", deployer)
+  ).attach(await eventBasedPredictionMarket.shortToken())) as ExpandedERC20;
+
+  return {
+    ...parentFixture,
+    usdc,
+    eventBasedPredictionMarket,
+    deployer,
+    longToken,
+    shortToken,
+    financialProductLibrary,
+  };
 }
