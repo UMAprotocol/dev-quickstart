@@ -164,7 +164,6 @@ contract EventBasedPredictionMarket is Testable {
     /**
      * @notice Creates a pair of long and short tokens equal in number to tokensToCreate. Pulls the required collateral
      * amount into this contract, defined by the collateralPerPair value.
-     * @dev The caller must approve this contract to transfer `tokensToCreate * collateralPerPair` amount of collateral.
      * @param tokensToCreate number of long and short synthetic tokens to create.
      * @return collateralUsed total collateral used to mint the synthetics.
      */
@@ -184,10 +183,6 @@ contract EventBasedPredictionMarket is Testable {
     /**
      * @notice Redeems a pair of long and short tokens equal in number to tokensToRedeem. Returns the commensurate
      * amount of collateral to the caller for the pair of tokens, defined by the collateralPerPair value.
-     * @dev This contract must have the `Burner` role for the `longToken` and `shortToken` in order to call `burnFrom`.
-     * @dev The caller does not need to approve this contract to transfer any amount of `tokensToRedeem` since long
-     * and short tokens are burned, rather than transferred, from the caller.
-     * @dev This method can be called either pre or post expiration.
      * @param tokensToRedeem number of long and short synthetic tokens to redeem.
      * @return collateralReturned total collateral returned in exchange for the pair of synthetics.
      */
@@ -204,12 +199,6 @@ contract EventBasedPredictionMarket is Testable {
 
     /**
      * @notice Settle long and/or short tokens in for collateral at a rate informed by the contract settlement.
-     * @dev Uses financialProductLibrary to compute the redemption rate between long and short tokens.
-     * @dev This contract must have the `Burner` role for the `longToken` and `shortToken` in order to call `burnFrom`.
-     * @dev The caller does not need to approve this contract to transfer any amount of `tokensToRedeem` since long
-     * and short tokens are burned, rather than transferred, from the caller.
-     * @dev This function can be called before or after expiration to facilitate early expiration. If a price has
-     * not yet been resolved for either normal or early expiration yet then it will revert.
      * @param longTokensToRedeem number of long tokens to settle.
      * @param shortTokensToRedeem number of short tokens to settle.
      * @return collateralReturned total collateral returned in exchange for the pair of synthetics.
@@ -218,10 +207,7 @@ contract EventBasedPredictionMarket is Testable {
         public
         returns (uint256 collateralReturned)
     {
-        // Get the settlement price and store it. Also sets expiryPercentLong to inform settlement. Reverts if either:
-        // a) the price request has not resolved (either a normal expiration call or early expiration call) or b) If the
-        // the contract was attempted to be settled early but the price returned is the ignore oracle price.
-        // Note that we use the bool receivedSettlementPrice over checking for price != 0 as 0 is a valid price.
+        // Get the settlement price and store it. Reverts if price has not yet been resolved.
         if (!receivedSettlementPrice) getExpirationPrice();
 
         require(longToken.burnFrom(msg.sender, longTokensToRedeem));
