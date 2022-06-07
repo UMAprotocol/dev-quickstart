@@ -1,4 +1,3 @@
-import { BinaryOptionLongShortPairFinancialProductLibrary } from "@uma/contracts-node/dist/packages/contracts-node/typechain/core/ethers";
 import hre from "hardhat";
 import Web3 from "web3";
 import { EventBasedPredictionMarket, ExpandedERC20 } from "../../typechain";
@@ -25,27 +24,17 @@ export async function deployEventBasedPredictionMarket(ethers: any) {
   // Sets collateral as approved in the UMA collateralWhitelist.
   await parentFixture.collateralWhitelist.addToWhitelist(usdc.address);
 
-  const financialProductLibrary = (await (
-    await getContractFactory("BinaryOptionLongShortPairFinancialProductLibrary", deployer)
-  ).deploy()) as BinaryOptionLongShortPairFinancialProductLibrary;
-
-  const constructorParams = {
-    pairName: "will it rain today?",
-    priceIdentifier: identifier,
-    collateralToken: usdc.address,
-    financialProductLibrary: financialProductLibrary.address,
-    customAncillaryData: utf8ToHex("some-address-field:0x1234"),
-    finder: parentFixture.finder.address,
-    timerAddress: parentFixture.timer.address,
-  };
-
   // Deploy the EventBasedPredictionMarket contract.
   const eventBasedPredictionMarket = (await (
     await getContractFactory("EventBasedPredictionMarket", deployer)
-  ).deploy(constructorParams)) as EventBasedPredictionMarket;
-
-  // Set long short pair parameters in the financial product library
-  await financialProductLibrary.setLongShortPairParameters(eventBasedPredictionMarket.address, 1);
+  ).deploy(
+    "will it rain today?",
+    identifier,
+    usdc.address,
+    utf8ToHex("some-address-field:0x1234"),
+    parentFixture.finder.address,
+    parentFixture.timer.address
+  )) as EventBasedPredictionMarket;
 
   // connect to existing ExpandedERC20 contract with ether
   const longToken = (await (
@@ -62,6 +51,5 @@ export async function deployEventBasedPredictionMarket(ethers: any) {
     deployer,
     longToken,
     shortToken,
-    financialProductLibrary,
   };
 }

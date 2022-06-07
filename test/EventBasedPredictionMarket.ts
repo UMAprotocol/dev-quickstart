@@ -6,9 +6,7 @@ import { umaEcosystemFixture } from "./fixtures/UmaEcosystem.Fixture";
 import { BigNumber, Contract, ethers, expect, SignerWithAddress, toWei } from "./utils";
 
 let eventBasedPredictionMarket: EventBasedPredictionMarket, usdc: Contract;
-let optimisticOracle: OptimisticOracle;
-let longToken: ExpandedERC20;
-let shortToken: ExpandedERC20;
+let optimisticOracle: OptimisticOracle, longToken: ExpandedERC20, shortToken: ExpandedERC20;
 let deployer: SignerWithAddress, sponsor: SignerWithAddress, holder: SignerWithAddress, disputer: SignerWithAddress;
 
 describe("EventBasedPredictionMarket functions", function () {
@@ -86,11 +84,6 @@ describe("EventBasedPredictionMarket functions", function () {
 
     // The EventBasedPredictionMarket shouldn't have received the settlement price.
     expect(await eventBasedPredictionMarket.receivedSettlementPrice()).to.equal(false);
-
-    // It shouldn't be possible to create tokens after the price has been settled.
-    await expect(eventBasedPredictionMarket.connect(sponsor).create(toWei(100))).to.be.revertedWith(
-      "VM Exception while processing transaction: reverted with reason string 'Price already proposed.'"
-    );
 
     // Holder redeems his long tokens.
     await eventBasedPredictionMarket.connect(holder).settle(toWei("50"), 0);
