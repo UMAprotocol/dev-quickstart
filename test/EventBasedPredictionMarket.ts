@@ -16,17 +16,17 @@ describe("EventBasedPredictionMarket functions", function () {
     const expirationTimestamp = await eventBasedPredictionMarket.expirationTimestamp();
     const optimisticOracleLivenessTime = await eventBasedPredictionMarket.optimisticOracleLivenessTime();
 
-    await optimisticOracle
-      .connect(deployer)
-      .proposePrice(eventBasedPredictionMarket.address, identifier, expirationTimestamp, ancillaryData, price);
+    await optimisticOracle.proposePrice(
+      eventBasedPredictionMarket.address,
+      identifier,
+      expirationTimestamp,
+      ancillaryData,
+      price
+    );
 
-    await optimisticOracle
-      .connect(deployer)
-      .setCurrentTime((await optimisticOracle.getCurrentTime()).add(optimisticOracleLivenessTime));
+    await optimisticOracle.setCurrentTime((await optimisticOracle.getCurrentTime()).add(optimisticOracleLivenessTime));
 
-    await optimisticOracle
-      .connect(deployer)
-      .settle(eventBasedPredictionMarket.address, identifier, expirationTimestamp, ancillaryData);
+    await optimisticOracle.settle(eventBasedPredictionMarket.address, identifier, expirationTimestamp, ancillaryData);
   };
 
   beforeEach(async function () {
@@ -36,19 +36,19 @@ describe("EventBasedPredictionMarket functions", function () {
     ({ eventBasedPredictionMarket, usdc, longToken, shortToken } = await eventBasedPredictionMarketFixture());
 
     // mint some fresh tokens for the sponsor, deployer and disputer.
-    await usdc.connect(deployer).mint(sponsor.address, amountToSeedWallets);
-    await usdc.connect(deployer).mint(deployer.address, amountToSeedWallets);
-    await usdc.connect(deployer).mint(disputer.address, amountToSeedWallets);
+    await usdc.mint(sponsor.address, amountToSeedWallets);
+    await usdc.mint(deployer.address, amountToSeedWallets);
+    await usdc.mint(disputer.address, amountToSeedWallets);
 
     // Approve the EventBasedPredictionMarket to spend tokens
     await usdc.connect(sponsor).approve(eventBasedPredictionMarket.address, amountToSeedWallets);
-    await usdc.connect(deployer).approve(eventBasedPredictionMarket.address, amountToSeedWallets);
+    await usdc.approve(eventBasedPredictionMarket.address, amountToSeedWallets);
 
     // Approve the Optimistic Oracle to spend bond tokens
-    await usdc.connect(deployer).approve(optimisticOracle.address, amountToSeedWallets);
+    await usdc.approve(optimisticOracle.address, amountToSeedWallets);
     await usdc.connect(disputer).approve(optimisticOracle.address, amountToSeedWallets);
 
-    await eventBasedPredictionMarket.connect(deployer).initializeMarket();
+    await eventBasedPredictionMarket.initializeMarket();
   });
 
   it("Event-based mint, redeem and expire lifecycle.", async function () {
@@ -140,18 +140,22 @@ describe("EventBasedPredictionMarket functions", function () {
   it("Event-based dispute workflow with auto re-request on dispute.", async function () {
     const requestSubmissionTimestamp = await eventBasedPredictionMarket.expirationTimestamp();
     const proposalSubmissionTimestamp = parseInt(requestSubmissionTimestamp.toString()) + 100;
-    await optimisticOracle.connect(deployer).setCurrentTime(proposalSubmissionTimestamp);
+    await optimisticOracle.setCurrentTime(proposalSubmissionTimestamp);
 
     const ancillaryData = await eventBasedPredictionMarket.customAncillaryData();
     const identifier = await eventBasedPredictionMarket.priceIdentifier();
     const expirationTimestamp = await eventBasedPredictionMarket.expirationTimestamp();
 
-    await optimisticOracle
-      .connect(deployer)
-      .proposePrice(eventBasedPredictionMarket.address, identifier, expirationTimestamp, ancillaryData, 0);
+    await optimisticOracle.proposePrice(
+      eventBasedPredictionMarket.address,
+      identifier,
+      expirationTimestamp,
+      ancillaryData,
+      0
+    );
 
     const disputeSubmissionTimestamp = proposalSubmissionTimestamp + 100;
-    await optimisticOracle.connect(deployer).setCurrentTime(disputeSubmissionTimestamp);
+    await optimisticOracle.setCurrentTime(disputeSubmissionTimestamp);
     await optimisticOracle
       .connect(disputer)
       .disputePrice(eventBasedPredictionMarket.address, identifier, expirationTimestamp, ancillaryData);
