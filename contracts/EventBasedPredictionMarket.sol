@@ -66,7 +66,9 @@ contract EventBasedPredictionMarket is Testable {
      ****************************************/
 
     modifier hasPrice() {
-        require(_getOO().hasPrice(address(this), priceIdentifier, expirationTimestamp, customAncillaryData));
+        require(
+            getOptimisticOracle().hasPrice(address(this), priceIdentifier, expirationTimestamp, customAncillaryData)
+        );
         _;
     }
 
@@ -140,7 +142,7 @@ contract EventBasedPredictionMarket is Testable {
         bytes memory ancillaryData,
         uint256 refund
     ) external {
-        OptimisticOracleInterface optimisticOracle = _getOO();
+        OptimisticOracleInterface optimisticOracle = getOptimisticOracle();
         require(msg.sender == address(optimisticOracle), "not authorized");
 
         expirationTimestamp = getCurrentTime();
@@ -232,7 +234,7 @@ contract EventBasedPredictionMarket is Testable {
      * accordingly to the deployer's parameters. Will revert if re-requesting for a previously requested combo.
      */
     function _requestOraclePrice() internal {
-        OptimisticOracleInterface optimisticOracle = _getOO();
+        OptimisticOracleInterface optimisticOracle = getOptimisticOracle();
 
         collateralToken.safeApprove(address(optimisticOracle), proposerReward);
 
@@ -300,7 +302,7 @@ contract EventBasedPredictionMarket is Testable {
      * @notice Get the optimistic oracle.
      * @return optimistic oracle instance.
      */
-    function _getOO() internal view returns (OptimisticOracleInterface) {
+    function getOptimisticOracle() internal view returns (OptimisticOracleInterface) {
         return OptimisticOracleInterface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracle));
     }
 
@@ -311,6 +313,6 @@ contract EventBasedPredictionMarket is Testable {
      * @return oraclePrice price for the request.
      */
     function getOraclePrice(uint256 requestTimestamp, bytes memory requestAncillaryData) internal returns (int256) {
-        return _getOO().settleAndGetPrice(priceIdentifier, requestTimestamp, requestAncillaryData);
+        return getOptimisticOracle().settleAndGetPrice(priceIdentifier, requestTimestamp, requestAncillaryData);
     }
 }
