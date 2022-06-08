@@ -108,8 +108,7 @@ describe("EventBasedPredictionMarket functions", function () {
     await eventBasedPredictionMarket.connect(sponsor).create(toWei(100));
 
     const createEvents = await eventBasedPredictionMarket.queryFilter(
-      eventBasedPredictionMarket.filters.TokensCreated(),
-      "latest"
+      eventBasedPredictionMarket.filters.TokensCreated()
     );
     expect(createEvents[0].args.sponsor === sponsor.address);
 
@@ -120,8 +119,7 @@ describe("EventBasedPredictionMarket functions", function () {
     await eventBasedPredictionMarket.connect(sponsor).redeem(toWei("25"));
 
     const tokensRedeemedEvents = await eventBasedPredictionMarket.queryFilter(
-      eventBasedPredictionMarket.filters.TokensRedeemed(),
-      "latest"
+      eventBasedPredictionMarket.filters.TokensRedeemed()
     );
     expect(tokensRedeemedEvents[0].args.sponsor === sponsor.address);
 
@@ -131,8 +129,7 @@ describe("EventBasedPredictionMarket functions", function () {
     await eventBasedPredictionMarket.connect(holder).settle(toWei("50"), 0);
 
     const positionSettledEvents = await eventBasedPredictionMarket.queryFilter(
-      eventBasedPredictionMarket.filters.PositionSettled(),
-      "latest"
+      eventBasedPredictionMarket.filters.PositionSettled()
     );
     expect(positionSettledEvents[0].args.sponsor === holder.address);
   });
