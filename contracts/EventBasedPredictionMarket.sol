@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "@uma/core/contracts/common/implementation/ExpandedERC20.sol";
-import "@uma/core/contracts/common/implementation/FixedPoint.sol";
 import "@uma/core/contracts/common/implementation/Testable.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
 
@@ -21,21 +20,21 @@ interface OptimisticOracleInterfaceEventBased {
 }
 
 contract EventBasedPredictionMarket is Testable {
-    using FixedPoint for FixedPoint.Unsigned;
     using SafeERC20 for ExpandedERC20;
 
     /***************************************************
      *  EVENT BASED PREDICTION MARKET DATA STRUCTURES  *
      ***************************************************/
     // Constants
-    uint256 ONE_ETHER = 1 ether;
+    uint8 public constant LSP_TOKEN_DECIMALS = 18;
+    uint256 public constant ONE_SCALED = 10**LSP_TOKEN_DECIMALS;
 
     bool public priceRequested;
     bool public receivedSettlementPrice;
 
     uint256 public expirationTimestamp;
     string public pairName;
-    uint256 public collateralPerPair = ONE_ETHER; // Amount of collateral a pair of tokens is always redeemable for.
+    uint256 public collateralPerPair = ONE_SCALED; // Amount of collateral a pair of tokens is always redeemable for.
 
     // Number between 0 and 1e18 to allocate collateral between long & short tokens at redemption. 0 entitles each short
     // to collateralPerPair and each long to 0. 1e18 makes each long worth collateralPerPair and short 0.
@@ -44,7 +43,7 @@ contract EventBasedPredictionMarket is Testable {
 
     // Price returned from the Optimistic oracle at settlement time.
     int256 public expiryPrice;
-    int256 public strikePrice = int256(ONE_ETHER);
+    int256 public strikePrice = int256(ONE_SCALED);
 
     // External contract interfaces.
     ExpandedERC20 public collateralToken;
@@ -101,10 +100,10 @@ contract EventBasedPredictionMarket is Testable {
 
         // Holding long tokens gives the owner exposure to the long position,
         // i.e. the case where the answer to the prediction market question is YES.
-        longToken = new ExpandedERC20(string(abi.encodePacked(_pairName, " Long Token")), "PLT", 18);
+        longToken = new ExpandedERC20(string(abi.encodePacked(_pairName, " Long Token")), "PLT", LSP_TOKEN_DECIMALS);
         // Holding short tokens gives the owner exposure to the short position,
         // i.e. the case where the answer to the prediction market question is NO.
-        shortToken = new ExpandedERC20(string(abi.encodePacked(_pairName, " Short Token")), "PST", 18);
+        shortToken = new ExpandedERC20(string(abi.encodePacked(_pairName, " Short Token")), "PST", LSP_TOKEN_DECIMALS);
 
         // Add burner and minter required roles to the long and short tokens.
         longToken.addMinter(address(this));
@@ -168,9 +167,12 @@ contract EventBasedPredictionMarket is Testable {
      * @return collateralUsed total collateral used to mint the synthetics.
      */
     function create(uint256 tokensToCreate) public requestInitialized returns (uint256 collateralUsed) {
-        // Note the use of mulCeil to prevent small collateralPerPair causing rounding of collateralUsed to 0 enabling
+        // Note the use of multiply and ceiling to prevent small collateralPerPair causing rounding of collateralUsed to 0 enabling
         // callers to mint dust LSP tokens without paying any collateral.
-        collateralUsed = FixedPoint.Unsigned(tokensToCreate).mulCeil(FixedPoint.Unsigned(collateralPerPair)).rawValue;
+        uint256 mulRaw = tokensToCreate * collateralPerPair;
+        uint256 mulFloor = mulRaw / ONE_SCALED;
+        uint256 mod = mulRaw % ONE_SCALED;
+        collateralUsed = mod != 0 ? mulFloor + 1 : mulFloor; // ceil(mulRaw / ONE_SCALED)
 
         collateralToken.safeTransferFrom(msg.sender, address(this), collateralUsed);
 
@@ -190,7 +192,7 @@ contract EventBasedPredictionMarket is Testable {
         require(longToken.burnFrom(msg.sender, tokensToRedeem));
         require(shortToken.burnFrom(msg.sender, tokensToRedeem));
 
-        collateralReturned = FixedPoint.Unsigned(tokensToRedeem).mul(FixedPoint.Unsigned(collateralPerPair)).rawValue;
+        collateralReturned = (tokensToRedeem * collateralPerPair) / ONE_SCALED;
 
         collateralToken.safeTransfer(msg.sender, collateralReturned);
 
@@ -215,16 +217,9 @@ contract EventBasedPredictionMarket is Testable {
 
         // expiryPercentLong is a number between 0 and 1e18. 0 means all collateral goes to short tokens and 1e18 means
         // all collateral goes to the long token. Total collateral returned is the sum of payouts.
-        uint256 longCollateralRedeemed = FixedPoint
-            .Unsigned(longTokensToRedeem)
-            .mul(FixedPoint.Unsigned(collateralPerPair))
-            .mul(FixedPoint.Unsigned(expiryPercentLong))
-            .rawValue;
-        uint256 shortCollateralRedeemed = FixedPoint
-            .Unsigned(shortTokensToRedeem)
-            .mul(FixedPoint.Unsigned(collateralPerPair))
-            .mul(FixedPoint.fromUnscaledUint(1).sub(FixedPoint.Unsigned(expiryPercentLong)))
-            .rawValue;
+        uint256 longCollateralRedeemed = (longTokensToRedeem * collateralPerPair * expiryPercentLong) / (ONE_SCALED**2);
+        uint256 shortCollateralRedeemed = (shortTokensToRedeem * collateralPerPair * (ONE_SCALED - expiryPercentLong)) /
+            (ONE_SCALED**2);
 
         collateralReturned = longCollateralRedeemed + shortCollateralRedeemed;
         collateralToken.safeTransfer(msg.sender, collateralReturned);
@@ -286,8 +281,8 @@ contract EventBasedPredictionMarket is Testable {
      * @return expiryPercentLong to indicate how much collateral should be sent between long and short tokens.
      */
     function percentageLongCollAtExpiry(int256 _expiryPrice) internal view returns (uint256) {
-        if (_expiryPrice >= strikePrice) return FixedPoint.fromUnscaledUint(1).rawValue;
-        else return FixedPoint.fromUnscaledUint(0).rawValue;
+        if (_expiryPrice >= strikePrice) return ONE_SCALED;
+        else return 0;
     }
 
     /**
@@ -300,7 +295,7 @@ contract EventBasedPredictionMarket is Testable {
         // Finally, compute the value of expiryPercentLong based on the expiryPrice. Cap the return value at 1e18 as
         // this should, by definition, between 0 and 1e18.
         expiryPercentLong = percentageLongCollAtExpiry(expiryPrice);
-        expiryPercentLong = expiryPercentLong < ONE_ETHER ? expiryPercentLong : ONE_ETHER;
+        expiryPercentLong = expiryPercentLong < ONE_SCALED ? expiryPercentLong : ONE_SCALED;
 
         receivedSettlementPrice = true;
     }

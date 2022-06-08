@@ -18,7 +18,8 @@
     "lint": "yarn prettier --list-different",
     "lint-fix": "yarn prettier --write",
     "prettier": "prettier .",
-    "test": "hardhat test"
+    "test": "hardhat test",
+    "compile": "hardhat compile"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.4.2",
