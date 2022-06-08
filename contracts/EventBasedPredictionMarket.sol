@@ -290,7 +290,7 @@ contract EventBasedPredictionMarket is Testable {
      * and customData combo then store this. If there is no price revert.
      */
     function getExpirationPrice() internal hasPrice {
-        expiryPrice = _getOP(expirationTimestamp, customAncillaryData);
+        expiryPrice = getOraclePrice(expirationTimestamp, customAncillaryData);
 
         // Finally, compute the value of expiryPercentLong based on the expiryPrice. Cap the return value at 1e18 as
         // this should, by definition, between 0 and 1e18.
@@ -314,7 +314,7 @@ contract EventBasedPredictionMarket is Testable {
      * @param requestAncillaryData ancillary data of the request.
      * @return oraclePrice price for the request.
      */
-    function _getOP(uint256 requestTimestamp, bytes memory requestAncillaryData) internal returns (int256) {
+    function getOraclePrice(uint256 requestTimestamp, bytes memory requestAncillaryData) internal returns (int256) {
         return _getOO().settleAndGetPrice(priceIdentifier, requestTimestamp, requestAncillaryData);
     }
 }
