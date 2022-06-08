@@ -30,7 +30,7 @@ contract EventBasedPredictionMarket is Testable {
 
     uint256 public expirationTimestamp;
     string public pairName;
-    uint256 public collateralPerPair = 1 ether; // Amount of collateral a pair of tokens is always redeemable for.
+    uint256 public collateralPerPair = 1e18; // Amount of collateral a pair of tokens is always redeemable for.
 
     // Number between 0 and 1e18 to allocate collateral between long & short tokens at redemption. 0 entitles each short
     // to collateralPerPair and each long to 0. 1e18 makes each long worth collateralPerPair and short 0.
@@ -39,7 +39,7 @@ contract EventBasedPredictionMarket is Testable {
 
     // Price returned from the Optimistic oracle at settlement time.
     int256 public expiryPrice;
-    int256 public strikePrice = int256(1 ether);
+    int256 public strikePrice = int256(1e18);
 
     // External contract interfaces.
     ExpandedERC20 public collateralToken;
@@ -168,9 +168,9 @@ contract EventBasedPredictionMarket is Testable {
         // Note the use of multiply and ceiling to prevent small collateralPerPair causing rounding of collateralUsed to 0 enabling
         // callers to mint dust LSP tokens without paying any collateral.
         uint256 mulRaw = tokensToCreate * collateralPerPair;
-        uint256 mulFloor = mulRaw / 1 ether;
-        uint256 mod = mulRaw % 1 ether;
-        collateralUsed = mod != 0 ? mulFloor + 1 : mulFloor; // ceil(mulRaw / 1 ether)
+        uint256 mulFloor = mulRaw / 1e18;
+        uint256 mod = mulRaw % 1e18;
+        collateralUsed = mod != 0 ? mulFloor + 1 : mulFloor; // ceil(mulRaw / 1e18)
 
         collateralToken.safeTransferFrom(msg.sender, address(this), collateralUsed);
 
@@ -190,7 +190,7 @@ contract EventBasedPredictionMarket is Testable {
         require(longToken.burnFrom(msg.sender, tokensToRedeem));
         require(shortToken.burnFrom(msg.sender, tokensToRedeem));
 
-        collateralReturned = (tokensToRedeem * collateralPerPair) / 1 ether;
+        collateralReturned = (tokensToRedeem * collateralPerPair) / 1e18;
 
         collateralToken.safeTransfer(msg.sender, collateralReturned);
 
@@ -215,9 +215,9 @@ contract EventBasedPredictionMarket is Testable {
 
         // expiryPercentLong is a number between 0 and 1e18. 0 means all collateral goes to short tokens and 1e18 means
         // all collateral goes to the long token. Total collateral returned is the sum of payouts.
-        uint256 longCollateralRedeemed = (longTokensToRedeem * collateralPerPair * expiryPercentLong) / (1 ether**2);
-        uint256 shortCollateralRedeemed = (shortTokensToRedeem * collateralPerPair * (1 ether - expiryPercentLong)) /
-            (1 ether**2);
+        uint256 longCollateralRedeemed = (longTokensToRedeem * collateralPerPair * expiryPercentLong) / (1e18**2);
+        uint256 shortCollateralRedeemed = (shortTokensToRedeem * collateralPerPair * (1e18 - expiryPercentLong)) /
+            (1e18**2);
 
         collateralReturned = longCollateralRedeemed + shortCollateralRedeemed;
         collateralToken.safeTransfer(msg.sender, collateralReturned);
@@ -279,7 +279,7 @@ contract EventBasedPredictionMarket is Testable {
      * @return expiryPercentLong to indicate how much collateral should be sent between long and short tokens.
      */
     function percentageLongCollAtExpiry(int256 _expiryPrice) internal view returns (uint256) {
-        if (_expiryPrice >= strikePrice) return 1 ether;
+        if (_expiryPrice >= strikePrice) return 1e18;
         else return 0;
     }
 
@@ -293,7 +293,7 @@ contract EventBasedPredictionMarket is Testable {
         // Finally, compute the value of expiryPercentLong based on the expiryPrice. Cap the return value at 1e18 as
         // this should, by definition, between 0 and 1e18.
         expiryPercentLong = percentageLongCollAtExpiry(expiryPrice);
-        expiryPercentLong = expiryPercentLong < 1 ether ? expiryPercentLong : 1 ether;
+        expiryPercentLong = expiryPercentLong < 1e18 ? expiryPercentLong : 1e18;
 
         receivedSettlementPrice = true;
     }
