@@ -105,6 +105,26 @@ describe("EventBasedPredictionMarket functions", function () {
     expect(await usdc.balanceOf(eventBasedPredictionMarket.address)).to.equal(0);
   });
 
+  it("Unresolved questions pay back 0.5 units of collateral for long and short tokens.", async function () {
+    await eventBasedPredictionMarket.connect(sponsor).create(toWei(100));
+    expect(await longToken.balanceOf(sponsor.address)).to.equal(toWei(100));
+    expect(await shortToken.balanceOf(sponsor.address)).to.equal(toWei(100));
+
+    // Propose and settle the optimistic oracle price.
+    // In this case we propose as a price that the answer cannot be solved.
+    await proposeAndSettleOptimisticOraclePrice(toWei("0.5"));
+
+    // Sponsor redeems his long tokens.
+    await eventBasedPredictionMarket.connect(sponsor).settle(toWei("100"), 0);
+    expect(await usdc.balanceOf(sponsor.address)).to.equal(amountToSeedWallets.sub(toWei(50)));
+    expect(await longToken.balanceOf(holder.address)).to.equal(0);
+
+    // Sponsor redeems his short tokens.
+    await eventBasedPredictionMarket.connect(sponsor).settle(0, toWei("100"));
+    expect(await usdc.balanceOf(sponsor.address)).to.equal(amountToSeedWallets);
+    expect(await shortToken.balanceOf(holder.address)).to.equal(0);
+  });
+
   it("Early expiring is not allowed.", async function () {
     const ancillaryData = await eventBasedPredictionMarket.customAncillaryData();
     const identifier = await eventBasedPredictionMarket.priceIdentifier();

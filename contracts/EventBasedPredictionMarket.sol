@@ -135,8 +135,8 @@ contract EventBasedPredictionMarket is Testable {
         require(identifier == priceIdentifier, "same identifier");
         require(keccak256(ancillaryData) == keccak256(customAncillaryData), "same ancillary data");
 
-        // Compute the value of settlementPrice based on the expiryPrice between 0 and 1e18.
-        settlementPrice = price >= 1e18 ? 1e18 : 0;
+        // Compute the value of settlementPrice based on the expiryPrice between, wether 0, 0.5e18 or 1e18.
+        settlementPrice = price < 1e18 ? price == 5e17 ? 5e17 : 0 : 1e18;
 
         receivedSettlementPrice = true;
     }
