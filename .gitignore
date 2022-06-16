@@ -9,3 +9,6 @@ typechain-types
 #Hardhat files
 cache
 artifacts
+
+contracts/common/*
+contracts/oracle/*

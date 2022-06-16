@@ -8,6 +8,7 @@ import "@uma/core/contracts/common/implementation/Testable.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
 
 import "./oracle/interfaces/OptimisticOracleV2Interface.sol";
+import "@uma/core/contracts/oracle/interfaces/IdentifierWhitelistInterface.sol";
 
 contract EventBasedPredictionMarket is Testable {
     using SafeERC20 for ExpandedERC20;
@@ -82,7 +83,6 @@ contract EventBasedPredictionMarket is Testable {
         address _timerAddress
     ) Testable(_timerAddress) {
         expirationTimestamp = getCurrentTime(); // Set the request timestamp to the current block timestamp.
-
         // Holding long tokens gives the owner exposure to the long position,
         // i.e. the case where the answer to the prediction market question is YES.
         longToken = new ExpandedERC20(string(abi.encodePacked(_pairName, " Long Token")), "PLT", 18);
@@ -97,7 +97,6 @@ contract EventBasedPredictionMarket is Testable {
         shortToken.addBurner(address(this));
 
         finder = _finder;
-
         collateralToken = _collateralToken;
         customAncillaryData = _customAncillaryData;
         pairName = _pairName;
@@ -108,6 +107,7 @@ contract EventBasedPredictionMarket is Testable {
      * The caller must have sufficient balance to pay the proposer reward and approve the contract to spend the collateral.
      */
     function initializeMarket() public {
+        require(_getIdentifierWhitelist().isIdentifierSupported(priceIdentifier), "Identifier not registered");
         // If the proposer reward was set then pull it from the caller of the function.
         if (proposerReward > 0) {
             collateralToken.safeTransferFrom(msg.sender, address(this), proposerReward);
@@ -275,5 +275,13 @@ contract EventBasedPredictionMarket is Testable {
      */
     function getOptimisticOracle() internal view returns (OptimisticOracleV2Interface) {
         return OptimisticOracleV2Interface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracle));
+    }
+
+    /**
+     * @notice Get the identifier white list.
+     * @return identifier whitelist instance.
+     */
+    function _getIdentifierWhitelist() internal view returns (IdentifierWhitelistInterface) {
+        return IdentifierWhitelistInterface(finder.getImplementationAddress(OracleInterfaces.IdentifierWhitelist));
     }
 }
