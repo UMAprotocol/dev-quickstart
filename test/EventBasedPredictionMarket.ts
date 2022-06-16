@@ -1,3 +1,4 @@
+import { MIN_INT_VALUE } from "@uma/common";
 import { OptimisticOracle } from "@uma/contracts-node/dist/packages/contracts-node/typechain/core/ethers";
 import { EventBasedPredictionMarket, ExpandedERC20, OptimisticOracleV2 } from "../typechain";
 import { amountToSeedWallets } from "./constants";
@@ -102,6 +103,24 @@ describe("EventBasedPredictionMarket functions", function () {
 
     // long short pair should have no collateral left in it as everything has been redeemed.
     expect(await usdc.balanceOf(eventBasedPredictionMarket.address)).to.equal(0);
+  });
+
+  it("Early expiring is not allowed.", async function () {
+    const ancillaryData = await eventBasedPredictionMarket.customAncillaryData();
+    const identifier = await eventBasedPredictionMarket.priceIdentifier();
+    const expirationTimestamp = await eventBasedPredictionMarket.expirationTimestamp();
+
+    await expect(
+      optimisticOracle.proposePrice(
+        eventBasedPredictionMarket.address,
+        identifier,
+        expirationTimestamp,
+        ancillaryData,
+        MIN_INT_VALUE
+      )
+    ).to.be.revertedWith(
+      "VM Exception while processing transaction: reverted with reason string 'Cannot propose 'too early''"
+    );
   });
 
   it("EventBasedPredictionMarket lifecycle events.", async function () {
