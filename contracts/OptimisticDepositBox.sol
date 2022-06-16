@@ -276,7 +276,7 @@ contract OptimisticDepositBox is Testable, Lockable {
     }
 
     function _getOptimisticOracle() internal view returns (OptimisticOracleInterface) {
-        return OptimisticOracleInterface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracle));
+        return OptimisticOracleInterface(finder.getImplementationAddress("OptimisticOracleV2")); // TODO OracleInterfaces.OptimisticOracleV2
     }
 
     function _getIdentifierWhitelist() internal view returns (IdentifierWhitelistInterface) {

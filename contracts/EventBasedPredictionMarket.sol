@@ -274,7 +274,7 @@ contract EventBasedPredictionMarket is Testable {
      * @return optimistic oracle instance.
      */
     function getOptimisticOracle() internal view returns (OptimisticOracleV2Interface) {
-        return OptimisticOracleV2Interface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracle));
+        return OptimisticOracleV2Interface(finder.getImplementationAddress("OptimisticOracleV2")); // TODO OracleInterfaces.OptimisticOracleV2
     }
 
     /**
