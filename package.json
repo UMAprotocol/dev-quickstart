@@ -18,12 +18,13 @@
     "lint": "yarn prettier --list-different",
     "lint-fix": "yarn prettier --write",
     "prettier": "prettier .",
-    "test": "hardhat test"
+    "test": "hardhat test",
+    "compile": "hardhat compile"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.4.2",
-    "@uma/common": "^2.17.0",
-    "@uma/contracts-node": "^0.2.0"
+    "@uma/common": "^2.20.0",
+    "@uma/contracts-node": "^0.3.7"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.5",
