@@ -20,16 +20,15 @@ contract EventBasedPredictionMarket is Testable {
 
     uint256 public expirationTimestamp;
     string public pairName;
-    uint256 public collateralPerPair = 1e18; // Amount of collateral a pair of tokens is always redeemable for.
 
     // Number between 0 and 1e18 to allocate collateral between long & short tokens at redemption. 0 entitles each short
-    // to collateralPerPair and each long to 0. 1e18 makes each long worth collateralPerPair and short 0.
+    // to 1e18 and each long to 0. 1e18 makes each long worth 1e18 and short 0.
     uint256 public expiryPercentLong;
+
     bytes32 public priceIdentifier;
 
     // Price returned from the Optimistic oracle at settlement time.
     int256 public expiryPrice;
-    int256 public strikePrice = int256(1e18);
 
     // External contract interfaces.
     ExpandedERC20 public collateralToken;
@@ -149,42 +148,30 @@ contract EventBasedPredictionMarket is Testable {
      ****************************************/
 
     /**
-     * @notice Creates a pair of long and short tokens equal in number to tokensToCreate. Pulls the required collateral
-     * amount into this contract, defined by the collateralPerPair value.
+     * @notice Creates a pair of long and short tokens equal in number to tokensToCreate. Pulls the required collateral.
      * @param tokensToCreate number of long and short synthetic tokens to create.
-     * @return collateralUsed total collateral used to mint the synthetics.
      */
-    function create(uint256 tokensToCreate) public requestInitialized returns (uint256 collateralUsed) {
-        // Note the use of multiply and ceiling to prevent small collateralPerPair causing rounding of collateralUsed to 0 enabling
-        // callers to mint dust LSP tokens without paying any collateral.
-        uint256 mulRaw = tokensToCreate * collateralPerPair;
-        uint256 mulFloor = mulRaw / 1e18;
-        uint256 mod = mulRaw % 1e18;
-        collateralUsed = mod != 0 ? mulFloor + 1 : mulFloor; // ceil(mulRaw / 1e18)
-
-        collateralToken.safeTransferFrom(msg.sender, address(this), collateralUsed);
+    function create(uint256 tokensToCreate) public requestInitialized {
+        collateralToken.safeTransferFrom(msg.sender, address(this), tokensToCreate);
 
         require(longToken.mint(msg.sender, tokensToCreate));
         require(shortToken.mint(msg.sender, tokensToCreate));
 
-        emit TokensCreated(msg.sender, collateralUsed, tokensToCreate);
+        emit TokensCreated(msg.sender, tokensToCreate, tokensToCreate);
     }
 
     /**
-     * @notice Redeems a pair of long and short tokens equal in number to tokensToRedeem. Returns the commensurate
-     * amount of collateral to the caller for the pair of tokens, defined by the collateralPerPair value.
+     * @notice Redeems a pair of long and short tokens equal in number to tokensToRedeem.
+     * Returns the corresponding collateral amount in a 1 to 1 ratio.
      * @param tokensToRedeem number of long and short synthetic tokens to redeem.
-     * @return collateralReturned total collateral returned in exchange for the pair of synthetics.
      */
-    function redeem(uint256 tokensToRedeem) public returns (uint256 collateralReturned) {
+    function redeem(uint256 tokensToRedeem) public {
         require(longToken.burnFrom(msg.sender, tokensToRedeem));
         require(shortToken.burnFrom(msg.sender, tokensToRedeem));
 
-        collateralReturned = (tokensToRedeem * collateralPerPair) / 1e18;
+        collateralToken.safeTransfer(msg.sender, tokensToRedeem);
 
-        collateralToken.safeTransfer(msg.sender, collateralReturned);
-
-        emit TokensRedeemed(msg.sender, collateralReturned, tokensToRedeem);
+        emit TokensRedeemed(msg.sender, tokensToRedeem, tokensToRedeem);
     }
 
     /**
@@ -205,9 +192,8 @@ contract EventBasedPredictionMarket is Testable {
 
         // expiryPercentLong is a number between 0 and 1e18. 0 means all collateral goes to short tokens and 1e18 means
         // all collateral goes to the long token. Total collateral returned is the sum of payouts.
-        uint256 longCollateralRedeemed = (longTokensToRedeem * collateralPerPair * expiryPercentLong) / (1e18**2);
-        uint256 shortCollateralRedeemed = (shortTokensToRedeem * collateralPerPair * (1e18 - expiryPercentLong)) /
-            (1e18**2);
+        uint256 longCollateralRedeemed = (longTokensToRedeem * expiryPercentLong) / (1e18);
+        uint256 shortCollateralRedeemed = (shortTokensToRedeem * (1e18 - expiryPercentLong)) / (1e18);
 
         collateralReturned = longCollateralRedeemed + shortCollateralRedeemed;
         collateralToken.safeTransfer(msg.sender, collateralReturned);
@@ -255,21 +241,10 @@ contract EventBasedPredictionMarket is Testable {
         // Make the request an event-based request.
         optimisticOracle.setEventBased(priceIdentifier, expirationTimestamp, customAncillaryData);
 
-        // Enable the callbacks
+        // Enable the priceDisputed callback
         optimisticOracle.setCallbacks(priceIdentifier, expirationTimestamp, customAncillaryData, false, true, false);
 
         priceRequested = true;
-    }
-
-    /**
-     * @notice Returns a number between 0 and 1e18 to indicate how much collateral each long and short token are entitled
-     * to per collateralPerPair.
-     * @param _expiryPrice price from the optimistic oracle for the LSP price identifier.
-     * @return expiryPercentLong to indicate how much collateral should be sent between long and short tokens.
-     */
-    function percentageLongCollAtExpiry(int256 _expiryPrice) internal view returns (uint256) {
-        if (_expiryPrice >= strikePrice) return 1e18;
-        else return 0;
     }
 
     /**
@@ -279,10 +254,8 @@ contract EventBasedPredictionMarket is Testable {
     function getExpirationPrice() internal hasPrice {
         expiryPrice = getOraclePrice(expirationTimestamp, customAncillaryData);
 
-        // Finally, compute the value of expiryPercentLong based on the expiryPrice. Cap the return value at 1e18 as
-        // this should, by definition, between 0 and 1e18.
-        expiryPercentLong = percentageLongCollAtExpiry(expiryPrice);
-        expiryPercentLong = expiryPercentLong < 1e18 ? expiryPercentLong : 1e18;
+        // Finally, compute the value of expiryPercentLong based on the expiryPrice between 0 and 1e18.
+        expiryPercentLong = expiryPrice >= 1e18 ? 1e18 : 0;
 
         receivedSettlementPrice = true;
     }
