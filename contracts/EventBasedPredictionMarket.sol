@@ -7,17 +7,7 @@ import "@uma/core/contracts/common/implementation/ExpandedERC20.sol";
 import "@uma/core/contracts/common/implementation/Testable.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
 
-import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
-import "@uma/core/contracts/oracle/interfaces/OptimisticOracleInterface.sol";
-
-// TODO use OptimisticOracleInterface from @uma/core once it's updated with setEventBased
-interface OptimisticOracleInterfaceEventBased {
-    function setEventBased(
-        bytes32 identifier,
-        uint256 timestamp,
-        bytes memory ancillaryData
-    ) external;
-}
+import "./oracle/interfaces/OptimisticOracleV2Interface.sol";
 
 contract EventBasedPredictionMarket is Testable {
     using SafeERC20 for ExpandedERC20;
@@ -142,7 +132,7 @@ contract EventBasedPredictionMarket is Testable {
         bytes memory ancillaryData,
         uint256 refund
     ) external {
-        OptimisticOracleInterface optimisticOracle = getOptimisticOracle();
+        OptimisticOracleV2Interface optimisticOracle = getOptimisticOracle();
         require(msg.sender == address(optimisticOracle), "not authorized");
 
         expirationTimestamp = getCurrentTime();
@@ -234,7 +224,7 @@ contract EventBasedPredictionMarket is Testable {
      * accordingly to the deployer's parameters. Will revert if re-requesting for a previously requested combo.
      */
     function _requestOraclePrice() internal {
-        OptimisticOracleInterface optimisticOracle = getOptimisticOracle();
+        OptimisticOracleV2Interface optimisticOracle = getOptimisticOracle();
 
         collateralToken.safeApprove(address(optimisticOracle), proposerReward);
 
@@ -263,11 +253,10 @@ contract EventBasedPredictionMarket is Testable {
         );
 
         // Make the request an event-based request.
-        OptimisticOracleInterfaceEventBased(address(optimisticOracle)).setEventBased(
-            priceIdentifier,
-            expirationTimestamp,
-            customAncillaryData
-        );
+        optimisticOracle.setEventBased(priceIdentifier, expirationTimestamp, customAncillaryData);
+
+        // Enable the callbacks
+        optimisticOracle.setCallbacks(priceIdentifier, expirationTimestamp, customAncillaryData, false, true, false);
 
         priceRequested = true;
     }
@@ -302,8 +291,8 @@ contract EventBasedPredictionMarket is Testable {
      * @notice Get the optimistic oracle.
      * @return optimistic oracle instance.
      */
-    function getOptimisticOracle() internal view returns (OptimisticOracleInterface) {
-        return OptimisticOracleInterface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracle));
+    function getOptimisticOracle() internal view returns (OptimisticOracleV2Interface) {
+        return OptimisticOracleV2Interface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracle));
     }
 
     /**

@@ -1,12 +1,12 @@
 import { OptimisticOracle } from "@uma/contracts-node/dist/packages/contracts-node/typechain/core/ethers";
-import { EventBasedPredictionMarket, ExpandedERC20 } from "../typechain";
+import { EventBasedPredictionMarket, ExpandedERC20, OptimisticOracleV2 } from "../typechain";
 import { amountToSeedWallets } from "./constants";
 import { eventBasedPredictionMarketFixture } from "./fixtures/EventBasedPredictionMarket.Fixture";
 import { umaEcosystemFixture } from "./fixtures/UmaEcosystem.Fixture";
 import { BigNumber, Contract, ethers, expect, SignerWithAddress, toWei } from "./utils";
 
 let eventBasedPredictionMarket: EventBasedPredictionMarket, usdc: Contract;
-let optimisticOracle: OptimisticOracle, longToken: ExpandedERC20, shortToken: ExpandedERC20;
+let optimisticOracle: OptimisticOracleV2, longToken: ExpandedERC20, shortToken: ExpandedERC20;
 let deployer: SignerWithAddress, sponsor: SignerWithAddress, holder: SignerWithAddress, disputer: SignerWithAddress;
 
 describe("EventBasedPredictionMarket functions", function () {
