@@ -23,7 +23,7 @@ contract EventBasedPredictionMarket is Testable {
 
     // Number between 0 and 1e18 to allocate collateral between long & short tokens at redemption. 0 entitles each short
     // to 1e18 and each long to 0. 1e18 makes each long worth 1e18 and short 0.
-    uint256 public expiryPercentLong;
+    uint256 public settlementPrice;
 
     bytes32 public priceIdentifier;
 
@@ -190,10 +190,10 @@ contract EventBasedPredictionMarket is Testable {
         require(longToken.burnFrom(msg.sender, longTokensToRedeem));
         require(shortToken.burnFrom(msg.sender, shortTokensToRedeem));
 
-        // expiryPercentLong is a number between 0 and 1e18. 0 means all collateral goes to short tokens and 1e18 means
+        // settlementPrice is a number between 0 and 1e18. 0 means all collateral goes to short tokens and 1e18 means
         // all collateral goes to the long token. Total collateral returned is the sum of payouts.
-        uint256 longCollateralRedeemed = (longTokensToRedeem * expiryPercentLong) / (1e18);
-        uint256 shortCollateralRedeemed = (shortTokensToRedeem * (1e18 - expiryPercentLong)) / (1e18);
+        uint256 longCollateralRedeemed = (longTokensToRedeem * settlementPrice) / (1e18);
+        uint256 shortCollateralRedeemed = (shortTokensToRedeem * (1e18 - settlementPrice)) / (1e18);
 
         collateralReturned = longCollateralRedeemed + shortCollateralRedeemed;
         collateralToken.safeTransfer(msg.sender, collateralReturned);
@@ -254,8 +254,8 @@ contract EventBasedPredictionMarket is Testable {
     function getExpirationPrice() internal hasPrice {
         expiryPrice = getOraclePrice(expirationTimestamp, customAncillaryData);
 
-        // Finally, compute the value of expiryPercentLong based on the expiryPrice between 0 and 1e18.
-        expiryPercentLong = expiryPrice >= 1e18 ? 1e18 : 0;
+        // Finally, compute the value of settlementPrice based on the expiryPrice between 0 and 1e18.
+        settlementPrice = expiryPrice >= 1e18 ? 1e18 : 0;
 
         receivedSettlementPrice = true;
     }
