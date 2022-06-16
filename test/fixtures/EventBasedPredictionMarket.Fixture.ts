@@ -1,7 +1,7 @@
 import hre from "hardhat";
 import Web3 from "web3";
 import { EventBasedPredictionMarket, ExpandedERC20 } from "../../typechain";
-import { identifier, TokenRolesEnum } from "../constants";
+import { TokenRolesEnum } from "../constants";
 import { getContractFactory } from "../utils";
 import { umaEcosystemFixture } from "./UmaEcosystem.Fixture";
 const { utf8ToHex } = Web3.utils;
@@ -29,7 +29,6 @@ export async function deployEventBasedPredictionMarket(ethers: any) {
     await getContractFactory("EventBasedPredictionMarket", deployer)
   ).deploy(
     "will it rain today?",
-    identifier,
     usdc.address,
     utf8ToHex("some-address-field:0x1234"),
     parentFixture.finder.address,
