@@ -25,7 +25,7 @@ contract EventBasedPredictionMarket is Testable {
     // to 1e18 and each long to 0. 1e18 makes each long worth 1e18 and short 0.
     uint256 public settlementPrice;
 
-    bytes32 public priceIdentifier;
+    bytes32 public priceIdentifier = "YES_OR_NO_QUERY";
 
     // Price returned from the Optimistic oracle at settlement time.
     int256 public expiryPrice;
@@ -69,7 +69,6 @@ contract EventBasedPredictionMarket is Testable {
     /**
      * @notice Construct the EventBasedPredictionMarket
      * @param _pairName: Name of the long short pair tokens created for the prediction market.
-     * @param _priceIdentifier: Price identifier, registered in the DVM for the long short pair.
      * @param _collateralToken: Collateral token used to back LSP synthetics.
      * @param _customAncillaryData: Custom ancillary data to be passed along with the price request to the OO.
      * @param _finder: DVM finder to find other UMA ecosystem contracts.
@@ -77,7 +76,6 @@ contract EventBasedPredictionMarket is Testable {
      */
     constructor(
         string memory _pairName,
-        bytes32 _priceIdentifier,
         ExpandedERC20 _collateralToken,
         bytes memory _customAncillaryData,
         FinderInterface _finder,
@@ -102,7 +100,6 @@ contract EventBasedPredictionMarket is Testable {
 
         collateralToken = _collateralToken;
         customAncillaryData = _customAncillaryData;
-        priceIdentifier = _priceIdentifier;
         pairName = _pairName;
     }
 
@@ -116,6 +113,32 @@ contract EventBasedPredictionMarket is Testable {
             collateralToken.safeTransferFrom(msg.sender, address(this), proposerReward);
         }
         _requestOraclePrice();
+    }
+
+    /**
+     * @notice Callback function called by the optimistic oracle when a price requested by this contract is settled.
+     * @param identifier price identifier being requested.
+     * @param timestamp timestamp of the price being requested.
+     * @param ancillaryData ancillary data of the price being requested.
+     * @param price price that was resolved by the escalation process.
+     */
+    function priceSettled(
+        bytes32 identifier,
+        uint256 timestamp,
+        bytes memory ancillaryData,
+        int256 price
+    ) external {
+        OptimisticOracleV2Interface optimisticOracle = getOptimisticOracle();
+        require(msg.sender == address(optimisticOracle), "not authorized");
+
+        require(timestamp == expirationTimestamp, "different timestamps");
+        require(identifier == priceIdentifier, "same identifier");
+        require(keccak256(ancillaryData) == keccak256(customAncillaryData), "same ancillary data");
+
+        // Compute the value of settlementPrice based on the expiryPrice between 0 and 1e18.
+        settlementPrice = price >= 1e18 ? 1e18 : 0;
+
+        receivedSettlementPrice = true;
     }
 
     /**
@@ -184,8 +207,7 @@ contract EventBasedPredictionMarket is Testable {
         public
         returns (uint256 collateralReturned)
     {
-        // Get the settlement price and store it. Reverts if price has not yet been resolved.
-        if (!receivedSettlementPrice) getExpirationPrice();
+        require(receivedSettlementPrice, "price not yet resolved");
 
         require(longToken.burnFrom(msg.sender, longTokensToRedeem));
         require(shortToken.burnFrom(msg.sender, shortTokensToRedeem));
@@ -241,23 +263,10 @@ contract EventBasedPredictionMarket is Testable {
         // Make the request an event-based request.
         optimisticOracle.setEventBased(priceIdentifier, expirationTimestamp, customAncillaryData);
 
-        // Enable the priceDisputed callback
-        optimisticOracle.setCallbacks(priceIdentifier, expirationTimestamp, customAncillaryData, false, true, false);
+        // Enable the priceDisputed and priceSettled callback
+        optimisticOracle.setCallbacks(priceIdentifier, expirationTimestamp, customAncillaryData, false, true, true);
 
         priceRequested = true;
-    }
-
-    /**
-     * @notice Fetch the optimistic oracle expiration price. If the oracle has the price for the provided expiration timestamp
-     * and customData combo then store this. If there is no price revert.
-     */
-    function getExpirationPrice() internal hasPrice {
-        expiryPrice = getOraclePrice(expirationTimestamp, customAncillaryData);
-
-        // Finally, compute the value of settlementPrice based on the expiryPrice between 0 and 1e18.
-        settlementPrice = expiryPrice >= 1e18 ? 1e18 : 0;
-
-        receivedSettlementPrice = true;
     }
 
     /**
@@ -266,15 +275,5 @@ contract EventBasedPredictionMarket is Testable {
      */
     function getOptimisticOracle() internal view returns (OptimisticOracleV2Interface) {
         return OptimisticOracleV2Interface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracle));
-    }
-
-    /**
-     * @notice Return the oracle price for a given request timestamp and ancillary data combo.
-     * @param requestTimestamp timestamp of the request.
-     * @param requestAncillaryData ancillary data of the request.
-     * @return oraclePrice price for the request.
-     */
-    function getOraclePrice(uint256 requestTimestamp, bytes memory requestAncillaryData) internal returns (int256) {
-        return getOptimisticOracle().settleAndGetPrice(priceIdentifier, requestTimestamp, requestAncillaryData);
     }
 }

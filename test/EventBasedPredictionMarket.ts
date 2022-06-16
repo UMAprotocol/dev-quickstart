@@ -82,8 +82,8 @@ describe("EventBasedPredictionMarket functions", function () {
     // In this case we are answering a YES_OR_NO_QUERY price request with a YES answer.
     await proposeAndSettleOptimisticOraclePrice(toWei(1));
 
-    // The EventBasedPredictionMarket shouldn't have received the settlement price.
-    expect(await eventBasedPredictionMarket.receivedSettlementPrice()).to.equal(false);
+    // The EventBasedPredictionMarket should have received the settlement price with the priceSettled callback.
+    expect(await eventBasedPredictionMarket.receivedSettlementPrice()).to.equal(true);
 
     // Holder redeems his long tokens.
     await eventBasedPredictionMarket.connect(holder).settle(toWei("50"), 0);
