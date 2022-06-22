@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "@uma/core/contracts/common/implementation/ExpandedERC20.sol";
 import "@uma/core/contracts/common/implementation/Testable.sol";
+import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
 
 import "./oracle/interfaces/OptimisticOracleV2Interface.sol";
@@ -82,6 +83,15 @@ contract EventBasedPredictionMarket is Testable {
         FinderInterface _finder,
         address _timerAddress
     ) Testable(_timerAddress) {
+        finder = _finder;
+
+        require(_getIdentifierWhitelist().isIdentifierSupported(priceIdentifier), "Identifier not registered");
+        require(_getAddressWhitelist().isOnWhitelist(address(_collateralToken)), "Unsupported collateral type");
+
+        collateralToken = _collateralToken;
+        customAncillaryData = _customAncillaryData;
+        pairName = _pairName;
+
         expirationTimestamp = getCurrentTime(); // Set the request timestamp to the current block timestamp.
         // Holding long tokens gives the owner exposure to the long position,
         // i.e. the case where the answer to the prediction market question is YES.
@@ -95,11 +105,6 @@ contract EventBasedPredictionMarket is Testable {
         shortToken.addMinter(address(this));
         longToken.addBurner(address(this));
         shortToken.addBurner(address(this));
-
-        finder = _finder;
-        collateralToken = _collateralToken;
-        customAncillaryData = _customAncillaryData;
-        pairName = _pairName;
     }
 
     /**
@@ -107,7 +112,6 @@ contract EventBasedPredictionMarket is Testable {
      * The caller must have sufficient balance to pay the proposer reward and approve the contract to spend the collateral.
      */
     function initializeMarket() public {
-        require(_getIdentifierWhitelist().isIdentifierSupported(priceIdentifier), "Identifier not registered");
         // If the proposer reward was set then pull it from the caller of the function.
         if (proposerReward > 0) {
             collateralToken.safeTransferFrom(msg.sender, address(this), proposerReward);
@@ -289,5 +293,13 @@ contract EventBasedPredictionMarket is Testable {
      */
     function _getIdentifierWhitelist() internal view returns (IdentifierWhitelistInterface) {
         return IdentifierWhitelistInterface(finder.getImplementationAddress(OracleInterfaces.IdentifierWhitelist));
+    }
+
+    /**
+     * @notice Get the address whitelist
+     * @return address whitelist instance.
+     */
+    function _getAddressWhitelist() internal view returns (AddressWhitelist) {
+        return AddressWhitelist(finder.getImplementationAddress(OracleInterfaces.CollateralWhitelist));
     }
 }
