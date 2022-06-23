@@ -23,8 +23,9 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.4.2",
-    "@uma/common": "^2.20.0",
-    "@uma/contracts-node": "^0.3.7"
+    "@uma/common": "^2.21.0",
+    "@uma/contracts-node": "^0.3.8",
+    "@uma/core": "2.29.0"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.5",

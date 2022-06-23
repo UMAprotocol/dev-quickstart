@@ -8,7 +8,7 @@ import "@uma/core/contracts/common/implementation/Testable.sol";
 import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
 
-import "./oracle/interfaces/OptimisticOracleV2Interface.sol";
+import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
 import "@uma/core/contracts/oracle/interfaces/IdentifierWhitelistInterface.sol";
 
 contract EventBasedPredictionMarket is Testable {

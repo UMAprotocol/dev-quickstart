@@ -12,7 +12,7 @@ import "@uma/core/contracts/common/implementation/Lockable.sol";
 
 import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
 import "@uma/core/contracts/oracle/interfaces/IdentifierWhitelistInterface.sol";
-import "@uma/core/contracts/oracle/interfaces/OptimisticOracleInterface.sol";
+import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
 import "@uma/core/contracts/oracle/implementation/ContractCreator.sol";
 
 /**
@@ -261,7 +261,7 @@ contract OptimisticDepositBox is Testable, Lockable {
 
     // Requests a price for `priceIdentifier` at `requestedTime` from the Optimistic Oracle.
     function _requestOraclePrice(uint256 requestedTime) internal {
-        OptimisticOracleInterface oracle = _getOptimisticOracle();
+        OptimisticOracleV2Interface oracle = _getOptimisticOracle();
         // For other use cases, you may need ancillary data or a reward. Here, they are both zero.
         oracle.requestPrice(priceIdentifier, requestedTime, "", IERC20(collateralCurrency), 0);
     }
@@ -275,8 +275,8 @@ contract OptimisticDepositBox is Testable, Lockable {
         require(depositBoxes[user].withdrawalRequestTimestamp == 0, "Pending withdrawal");
     }
 
-    function _getOptimisticOracle() internal view returns (OptimisticOracleInterface) {
-        return OptimisticOracleInterface(finder.getImplementationAddress("OptimisticOracleV2")); // TODO OracleInterfaces.OptimisticOracleV2
+    function _getOptimisticOracle() internal view returns (OptimisticOracleV2Interface) {
+        return OptimisticOracleV2Interface(finder.getImplementationAddress("OptimisticOracleV2")); // TODO OracleInterfaces.OptimisticOracleV2
     }
 
     function _getIdentifierWhitelist() internal view returns (IdentifierWhitelistInterface) {
@@ -289,7 +289,7 @@ contract OptimisticDepositBox is Testable, Lockable {
 
     // Fetches a resolved oracle price from the Optimistic Oracle. Reverts if the oracle hasn't resolved for this request.
     function _getOraclePrice(uint256 withdrawalRequestTimestamp) internal returns (uint256) {
-        OptimisticOracleInterface oracle = _getOptimisticOracle();
+        OptimisticOracleV2Interface oracle = _getOptimisticOracle();
         require(
             oracle.hasPrice(address(this), priceIdentifier, withdrawalRequestTimestamp, ""),
             "Unresolved oracle price"
