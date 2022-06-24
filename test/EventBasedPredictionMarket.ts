@@ -1,12 +1,13 @@
+import { MIN_INT_VALUE } from "@uma/common";
 import { OptimisticOracle } from "@uma/contracts-node/dist/packages/contracts-node/typechain/core/ethers";
-import { EventBasedPredictionMarket, ExpandedERC20 } from "../typechain";
+import { EventBasedPredictionMarket, ExpandedERC20, OptimisticOracleV2 } from "../typechain";
 import { amountToSeedWallets } from "./constants";
 import { eventBasedPredictionMarketFixture } from "./fixtures/EventBasedPredictionMarket.Fixture";
 import { umaEcosystemFixture } from "./fixtures/UmaEcosystem.Fixture";
 import { BigNumber, Contract, ethers, expect, SignerWithAddress, toWei } from "./utils";
 
 let eventBasedPredictionMarket: EventBasedPredictionMarket, usdc: Contract;
-let optimisticOracle: OptimisticOracle, longToken: ExpandedERC20, shortToken: ExpandedERC20;
+let optimisticOracle: OptimisticOracleV2, longToken: ExpandedERC20, shortToken: ExpandedERC20;
 let deployer: SignerWithAddress, sponsor: SignerWithAddress, holder: SignerWithAddress, disputer: SignerWithAddress;
 
 describe("EventBasedPredictionMarket functions", function () {
@@ -82,8 +83,8 @@ describe("EventBasedPredictionMarket functions", function () {
     // In this case we are answering a YES_OR_NO_QUERY price request with a YES answer.
     await proposeAndSettleOptimisticOraclePrice(toWei(1));
 
-    // The EventBasedPredictionMarket shouldn't have received the settlement price.
-    expect(await eventBasedPredictionMarket.receivedSettlementPrice()).to.equal(false);
+    // The EventBasedPredictionMarket should have received the settlement price with the priceSettled callback.
+    expect(await eventBasedPredictionMarket.receivedSettlementPrice()).to.equal(true);
 
     // Holder redeems his long tokens.
     await eventBasedPredictionMarket.connect(holder).settle(toWei("50"), 0);
@@ -102,6 +103,44 @@ describe("EventBasedPredictionMarket functions", function () {
 
     // long short pair should have no collateral left in it as everything has been redeemed.
     expect(await usdc.balanceOf(eventBasedPredictionMarket.address)).to.equal(0);
+  });
+
+  it("Unresolved questions pay back 0.5 units of collateral for long and short tokens.", async function () {
+    await eventBasedPredictionMarket.connect(sponsor).create(toWei(100));
+    expect(await longToken.balanceOf(sponsor.address)).to.equal(toWei(100));
+    expect(await shortToken.balanceOf(sponsor.address)).to.equal(toWei(100));
+
+    // Propose and settle the optimistic oracle price.
+    // In this case we propose as a price that the answer cannot be solved.
+    await proposeAndSettleOptimisticOraclePrice(toWei("0.5"));
+
+    // Sponsor redeems his long tokens.
+    await eventBasedPredictionMarket.connect(sponsor).settle(toWei("100"), 0);
+    expect(await usdc.balanceOf(sponsor.address)).to.equal(amountToSeedWallets.sub(toWei(50)));
+    expect(await longToken.balanceOf(holder.address)).to.equal(0);
+
+    // Sponsor redeems his short tokens.
+    await eventBasedPredictionMarket.connect(sponsor).settle(0, toWei("100"));
+    expect(await usdc.balanceOf(sponsor.address)).to.equal(amountToSeedWallets);
+    expect(await shortToken.balanceOf(holder.address)).to.equal(0);
+  });
+
+  it("Early expiring is not allowed.", async function () {
+    const ancillaryData = await eventBasedPredictionMarket.customAncillaryData();
+    const identifier = await eventBasedPredictionMarket.priceIdentifier();
+    const expirationTimestamp = await eventBasedPredictionMarket.expirationTimestamp();
+
+    await expect(
+      optimisticOracle.proposePrice(
+        eventBasedPredictionMarket.address,
+        identifier,
+        expirationTimestamp,
+        ancillaryData,
+        MIN_INT_VALUE
+      )
+    ).to.be.revertedWith(
+      "VM Exception while processing transaction: reverted with reason string 'Cannot propose 'too early''"
+    );
   });
 
   it("EventBasedPredictionMarket lifecycle events.", async function () {

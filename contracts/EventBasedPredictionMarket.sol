@@ -5,19 +5,11 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "@uma/core/contracts/common/implementation/ExpandedERC20.sol";
 import "@uma/core/contracts/common/implementation/Testable.sol";
+import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
 
-import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
-import "@uma/core/contracts/oracle/interfaces/OptimisticOracleInterface.sol";
-
-// TODO use OptimisticOracleInterface from @uma/core once it's updated with setEventBased
-interface OptimisticOracleInterfaceEventBased {
-    function setEventBased(
-        bytes32 identifier,
-        uint256 timestamp,
-        bytes memory ancillaryData
-    ) external;
-}
+import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
+import "@uma/core/contracts/oracle/interfaces/IdentifierWhitelistInterface.sol";
 
 contract EventBasedPredictionMarket is Testable {
     using SafeERC20 for ExpandedERC20;
@@ -30,16 +22,15 @@ contract EventBasedPredictionMarket is Testable {
 
     uint256 public expirationTimestamp;
     string public pairName;
-    uint256 public collateralPerPair = 1e18; // Amount of collateral a pair of tokens is always redeemable for.
 
     // Number between 0 and 1e18 to allocate collateral between long & short tokens at redemption. 0 entitles each short
-    // to collateralPerPair and each long to 0. 1e18 makes each long worth collateralPerPair and short 0.
-    uint256 public expiryPercentLong;
-    bytes32 public priceIdentifier;
+    // to 1e18 and each long to 0. 1e18 makes each long worth 1e18 and short 0.
+    uint256 public settlementPrice;
+
+    bytes32 public priceIdentifier = "YES_OR_NO_QUERY";
 
     // Price returned from the Optimistic oracle at settlement time.
     int256 public expiryPrice;
-    int256 public strikePrice = int256(1e18);
 
     // External contract interfaces.
     ExpandedERC20 public collateralToken;
@@ -80,7 +71,6 @@ contract EventBasedPredictionMarket is Testable {
     /**
      * @notice Construct the EventBasedPredictionMarket
      * @param _pairName: Name of the long short pair tokens created for the prediction market.
-     * @param _priceIdentifier: Price identifier, registered in the DVM for the long short pair.
      * @param _collateralToken: Collateral token used to back LSP synthetics.
      * @param _customAncillaryData: Custom ancillary data to be passed along with the price request to the OO.
      * @param _finder: DVM finder to find other UMA ecosystem contracts.
@@ -88,14 +78,21 @@ contract EventBasedPredictionMarket is Testable {
      */
     constructor(
         string memory _pairName,
-        bytes32 _priceIdentifier,
         ExpandedERC20 _collateralToken,
         bytes memory _customAncillaryData,
         FinderInterface _finder,
         address _timerAddress
     ) Testable(_timerAddress) {
-        expirationTimestamp = getCurrentTime(); // Set the request timestamp to the current block timestamp.
+        finder = _finder;
 
+        require(_getIdentifierWhitelist().isIdentifierSupported(priceIdentifier), "Identifier not registered");
+        require(_getAddressWhitelist().isOnWhitelist(address(_collateralToken)), "Unsupported collateral type");
+
+        collateralToken = _collateralToken;
+        customAncillaryData = _customAncillaryData;
+        pairName = _pairName;
+
+        expirationTimestamp = getCurrentTime(); // Set the request timestamp to the current block timestamp.
         // Holding long tokens gives the owner exposure to the long position,
         // i.e. the case where the answer to the prediction market question is YES.
         longToken = new ExpandedERC20(string(abi.encodePacked(_pairName, " Long Token")), "PLT", 18);
@@ -108,13 +105,6 @@ contract EventBasedPredictionMarket is Testable {
         shortToken.addMinter(address(this));
         longToken.addBurner(address(this));
         shortToken.addBurner(address(this));
-
-        finder = _finder;
-
-        collateralToken = _collateralToken;
-        customAncillaryData = _customAncillaryData;
-        priceIdentifier = _priceIdentifier;
-        pairName = _pairName;
     }
 
     /**
@@ -130,6 +120,38 @@ contract EventBasedPredictionMarket is Testable {
     }
 
     /**
+     * @notice Callback function called by the optimistic oracle when a price requested by this contract is settled.
+     * @param identifier price identifier being requested.
+     * @param timestamp timestamp of the price being requested.
+     * @param ancillaryData ancillary data of the price being requested.
+     * @param price price that was resolved by the escalation process.
+     */
+    function priceSettled(
+        bytes32 identifier,
+        uint256 timestamp,
+        bytes memory ancillaryData,
+        int256 price
+    ) external {
+        OptimisticOracleV2Interface optimisticOracle = getOptimisticOracle();
+        require(msg.sender == address(optimisticOracle), "not authorized");
+
+        require(timestamp == expirationTimestamp, "different timestamps");
+        require(identifier == priceIdentifier, "same identifier");
+        require(keccak256(ancillaryData) == keccak256(customAncillaryData), "same ancillary data");
+
+        // Calculate the value of settlementPrice using either 0, 0.5e18, or 1e18 as the expiryPrice.
+        if (price >= 1e18) {
+            settlementPrice = 1e18;
+        } else if (price == 5e17) {
+            settlementPrice = 5e17;
+        } else {
+            settlementPrice = 0;
+        }
+
+        receivedSettlementPrice = true;
+    }
+
+    /**
      * @notice Callback function called by the optimistic oracle when a price requested by this contract is disputed.
      * @param identifier The identifier of the price request.
      * @param timestamp The timestamp of the price request.
@@ -142,7 +164,7 @@ contract EventBasedPredictionMarket is Testable {
         bytes memory ancillaryData,
         uint256 refund
     ) external {
-        OptimisticOracleInterface optimisticOracle = getOptimisticOracle();
+        OptimisticOracleV2Interface optimisticOracle = getOptimisticOracle();
         require(msg.sender == address(optimisticOracle), "not authorized");
 
         expirationTimestamp = getCurrentTime();
@@ -159,42 +181,30 @@ contract EventBasedPredictionMarket is Testable {
      ****************************************/
 
     /**
-     * @notice Creates a pair of long and short tokens equal in number to tokensToCreate. Pulls the required collateral
-     * amount into this contract, defined by the collateralPerPair value.
+     * @notice Creates a pair of long and short tokens equal in number to tokensToCreate. Pulls the required collateral.
      * @param tokensToCreate number of long and short synthetic tokens to create.
-     * @return collateralUsed total collateral used to mint the synthetics.
      */
-    function create(uint256 tokensToCreate) public requestInitialized returns (uint256 collateralUsed) {
-        // Note the use of multiply and ceiling to prevent small collateralPerPair causing rounding of collateralUsed to 0 enabling
-        // callers to mint dust LSP tokens without paying any collateral.
-        uint256 mulRaw = tokensToCreate * collateralPerPair;
-        uint256 mulFloor = mulRaw / 1e18;
-        uint256 mod = mulRaw % 1e18;
-        collateralUsed = mod != 0 ? mulFloor + 1 : mulFloor; // ceil(mulRaw / 1e18)
-
-        collateralToken.safeTransferFrom(msg.sender, address(this), collateralUsed);
+    function create(uint256 tokensToCreate) public requestInitialized {
+        collateralToken.safeTransferFrom(msg.sender, address(this), tokensToCreate);
 
         require(longToken.mint(msg.sender, tokensToCreate));
         require(shortToken.mint(msg.sender, tokensToCreate));
 
-        emit TokensCreated(msg.sender, collateralUsed, tokensToCreate);
+        emit TokensCreated(msg.sender, tokensToCreate, tokensToCreate);
     }
 
     /**
-     * @notice Redeems a pair of long and short tokens equal in number to tokensToRedeem. Returns the commensurate
-     * amount of collateral to the caller for the pair of tokens, defined by the collateralPerPair value.
+     * @notice Redeems a pair of long and short tokens equal in number to tokensToRedeem.
+     * Returns the corresponding collateral amount in a 1 to 1 ratio.
      * @param tokensToRedeem number of long and short synthetic tokens to redeem.
-     * @return collateralReturned total collateral returned in exchange for the pair of synthetics.
      */
-    function redeem(uint256 tokensToRedeem) public returns (uint256 collateralReturned) {
+    function redeem(uint256 tokensToRedeem) public {
         require(longToken.burnFrom(msg.sender, tokensToRedeem));
         require(shortToken.burnFrom(msg.sender, tokensToRedeem));
 
-        collateralReturned = (tokensToRedeem * collateralPerPair) / 1e18;
+        collateralToken.safeTransfer(msg.sender, tokensToRedeem);
 
-        collateralToken.safeTransfer(msg.sender, collateralReturned);
-
-        emit TokensRedeemed(msg.sender, collateralReturned, tokensToRedeem);
+        emit TokensRedeemed(msg.sender, tokensToRedeem, tokensToRedeem);
     }
 
     /**
@@ -207,17 +217,15 @@ contract EventBasedPredictionMarket is Testable {
         public
         returns (uint256 collateralReturned)
     {
-        // Get the settlement price and store it. Reverts if price has not yet been resolved.
-        if (!receivedSettlementPrice) getExpirationPrice();
+        require(receivedSettlementPrice, "price not yet resolved");
 
         require(longToken.burnFrom(msg.sender, longTokensToRedeem));
         require(shortToken.burnFrom(msg.sender, shortTokensToRedeem));
 
-        // expiryPercentLong is a number between 0 and 1e18. 0 means all collateral goes to short tokens and 1e18 means
+        // settlementPrice is a number between 0 and 1e18. 0 means all collateral goes to short tokens and 1e18 means
         // all collateral goes to the long token. Total collateral returned is the sum of payouts.
-        uint256 longCollateralRedeemed = (longTokensToRedeem * collateralPerPair * expiryPercentLong) / (1e18**2);
-        uint256 shortCollateralRedeemed = (shortTokensToRedeem * collateralPerPair * (1e18 - expiryPercentLong)) /
-            (1e18**2);
+        uint256 longCollateralRedeemed = (longTokensToRedeem * settlementPrice) / (1e18);
+        uint256 shortCollateralRedeemed = (shortTokensToRedeem * (1e18 - settlementPrice)) / (1e18);
 
         collateralReturned = longCollateralRedeemed + shortCollateralRedeemed;
         collateralToken.safeTransfer(msg.sender, collateralReturned);
@@ -234,7 +242,7 @@ contract EventBasedPredictionMarket is Testable {
      * accordingly to the deployer's parameters. Will revert if re-requesting for a previously requested combo.
      */
     function _requestOraclePrice() internal {
-        OptimisticOracleInterface optimisticOracle = getOptimisticOracle();
+        OptimisticOracleV2Interface optimisticOracle = getOptimisticOracle();
 
         collateralToken.safeApprove(address(optimisticOracle), proposerReward);
 
@@ -263,56 +271,35 @@ contract EventBasedPredictionMarket is Testable {
         );
 
         // Make the request an event-based request.
-        OptimisticOracleInterfaceEventBased(address(optimisticOracle)).setEventBased(
-            priceIdentifier,
-            expirationTimestamp,
-            customAncillaryData
-        );
+        optimisticOracle.setEventBased(priceIdentifier, expirationTimestamp, customAncillaryData);
+
+        // Enable the priceDisputed and priceSettled callback
+        optimisticOracle.setCallbacks(priceIdentifier, expirationTimestamp, customAncillaryData, false, true, true);
 
         priceRequested = true;
-    }
-
-    /**
-     * @notice Returns a number between 0 and 1e18 to indicate how much collateral each long and short token are entitled
-     * to per collateralPerPair.
-     * @param _expiryPrice price from the optimistic oracle for the LSP price identifier.
-     * @return expiryPercentLong to indicate how much collateral should be sent between long and short tokens.
-     */
-    function percentageLongCollAtExpiry(int256 _expiryPrice) internal view returns (uint256) {
-        if (_expiryPrice >= strikePrice) return 1e18;
-        else return 0;
-    }
-
-    /**
-     * @notice Fetch the optimistic oracle expiration price. If the oracle has the price for the provided expiration timestamp
-     * and customData combo then store this. If there is no price revert.
-     */
-    function getExpirationPrice() internal hasPrice {
-        expiryPrice = getOraclePrice(expirationTimestamp, customAncillaryData);
-
-        // Finally, compute the value of expiryPercentLong based on the expiryPrice. Cap the return value at 1e18 as
-        // this should, by definition, between 0 and 1e18.
-        expiryPercentLong = percentageLongCollAtExpiry(expiryPrice);
-        expiryPercentLong = expiryPercentLong < 1e18 ? expiryPercentLong : 1e18;
-
-        receivedSettlementPrice = true;
     }
 
     /**
      * @notice Get the optimistic oracle.
      * @return optimistic oracle instance.
      */
-    function getOptimisticOracle() internal view returns (OptimisticOracleInterface) {
-        return OptimisticOracleInterface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracle));
+    function getOptimisticOracle() internal view returns (OptimisticOracleV2Interface) {
+        return OptimisticOracleV2Interface(finder.getImplementationAddress("OptimisticOracleV2")); // TODO OracleInterfaces.OptimisticOracleV2
     }
 
     /**
-     * @notice Return the oracle price for a given request timestamp and ancillary data combo.
-     * @param requestTimestamp timestamp of the request.
-     * @param requestAncillaryData ancillary data of the request.
-     * @return oraclePrice price for the request.
+     * @notice Get the identifier white list.
+     * @return identifier whitelist instance.
      */
-    function getOraclePrice(uint256 requestTimestamp, bytes memory requestAncillaryData) internal returns (int256) {
-        return getOptimisticOracle().settleAndGetPrice(priceIdentifier, requestTimestamp, requestAncillaryData);
+    function _getIdentifierWhitelist() internal view returns (IdentifierWhitelistInterface) {
+        return IdentifierWhitelistInterface(finder.getImplementationAddress(OracleInterfaces.IdentifierWhitelist));
+    }
+
+    /**
+     * @notice Get the address whitelist
+     * @return address whitelist instance.
+     */
+    function _getAddressWhitelist() internal view returns (AddressWhitelist) {
+        return AddressWhitelist(finder.getImplementationAddress(OracleInterfaces.CollateralWhitelist));
     }
 }
