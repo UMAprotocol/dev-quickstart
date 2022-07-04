@@ -40,9 +40,9 @@ contract EventBasedPredictionMarket is Testable {
 
     // Optimistic oracle customization parameters.
     bytes public customAncillaryData;
-    uint256 public proposerReward = 10 ether;
+    uint256 public proposerReward = 10e18;
     uint256 public optimisticOracleLivenessTime = 3600; // 1 hour
-    uint256 public optimisticOracleProposerBond = 500 ether;
+    uint256 public optimisticOracleProposerBond = 500e18;
 
     /****************************************
      *                EVENTS                *

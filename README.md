@@ -1,6 +1,6 @@
 ## Developer Quickstart Repo
 
-This repo is intended to have scripts and tests available to allow for testing UMA contracts. The repo uses the `OptimisticDepositBox` contract as an example.
+This repo is intended to have scripts and tests available to allow for testing UMA contracts. The repo uses the `OptimisticDepositBox` and `EventBasedPredictionMarket` contracts as examples.
 
 ## Install dependencies
 
@@ -33,7 +33,7 @@ Use the command below to deploy a particular contract (along with any dependenci
 ```sh
 export MNEMONIC="Your 12-word phrase here"
 export CUSTOM_NODE_URL="Your node url here"
-yarn hardhat deploy --network kovan --tags OptimisticDepositBox
+yarn hardhat deploy --network kovan --tags OptimisticDepositBox,EventBasedPredictionMarket
 ```
 
 ## Contract verification
