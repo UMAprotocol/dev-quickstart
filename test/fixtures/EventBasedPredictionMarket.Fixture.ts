@@ -28,7 +28,7 @@ export async function deployEventBasedPredictionMarket(ethers: any) {
   const eventBasedPredictionMarket = (await (
     await getContractFactory("EventBasedPredictionMarket", deployer)
   ).deploy(
-    "will it rain today?",
+    "when X happens, will the price of Y equal 100?",
     usdc.address,
     utf8ToHex("some-address-field:0x1234"),
     parentFixture.finder.address,
