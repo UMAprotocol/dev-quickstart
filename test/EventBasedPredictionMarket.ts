@@ -1,5 +1,5 @@
 import { MIN_INT_VALUE } from "@uma/common";
-import { OptimisticOracleV2Ethers } from "@uma/contracts-node";
+import { OptimisticOracleV2Ethers, MockOracleAncillaryEthers } from "@uma/contracts-node";
 import { EventBasedPredictionMarket, ExpandedERC20 } from "../typechain";
 import { amountToSeedWallets } from "./constants";
 import { eventBasedPredictionMarketFixture } from "./fixtures/EventBasedPredictionMarket.Fixture";
@@ -7,7 +7,10 @@ import { umaEcosystemFixture } from "./fixtures/UmaEcosystem.Fixture";
 import { BigNumber, Contract, ethers, expect, SignerWithAddress, toWei } from "./utils";
 
 let eventBasedPredictionMarket: EventBasedPredictionMarket, usdc: Contract;
-let optimisticOracle: OptimisticOracleV2Ethers, longToken: ExpandedERC20, shortToken: ExpandedERC20;
+let optimisticOracle: OptimisticOracleV2Ethers,
+  mockOracle: MockOracleAncillaryEthers,
+  longToken: ExpandedERC20,
+  shortToken: ExpandedERC20;
 let deployer: SignerWithAddress, sponsor: SignerWithAddress, holder: SignerWithAddress, disputer: SignerWithAddress;
 
 describe("EventBasedPredictionMarket functions", function () {
@@ -33,7 +36,7 @@ describe("EventBasedPredictionMarket functions", function () {
   beforeEach(async function () {
     [deployer, sponsor, holder, disputer] = await ethers.getSigners();
 
-    ({ optimisticOracle } = await umaEcosystemFixture());
+    ({ optimisticOracle, mockOracle } = await umaEcosystemFixture());
     ({ eventBasedPredictionMarket, usdc, longToken, shortToken } = await eventBasedPredictionMarketFixture());
 
     // mint some fresh tokens for the sponsor, deployer and disputer.
@@ -210,5 +213,58 @@ describe("EventBasedPredictionMarket functions", function () {
     const sponsorInitialBalance = await usdc.balanceOf(sponsor.address);
     await eventBasedPredictionMarket.connect(sponsor).settle(toWei("100"), toWei("0"));
     expect(await usdc.balanceOf(sponsor.address)).to.equal(sponsorInitialBalance.add(toWei(100)));
+  });
+
+  it("Erroneously disputed price requests can be settled, as well as auto-requested price requests.", async function () {
+    const requestSubmissionTimestamp = await eventBasedPredictionMarket.expirationTimestamp();
+    const proposalSubmissionTimestamp = parseInt(requestSubmissionTimestamp.toString()) + 100;
+    await optimisticOracle.setCurrentTime(proposalSubmissionTimestamp);
+
+    const ancillaryData = await eventBasedPredictionMarket.customAncillaryData();
+    const identifier = await eventBasedPredictionMarket.priceIdentifier();
+    const expirationTimestamp = await eventBasedPredictionMarket.expirationTimestamp();
+
+    // Sponsor creates some Long short tokens
+    await eventBasedPredictionMarket.connect(sponsor).create(toWei(100));
+
+    await optimisticOracle.proposePrice(
+      eventBasedPredictionMarket.address,
+      identifier,
+      expirationTimestamp,
+      ancillaryData,
+      0
+    );
+
+    const disputeSubmissionTimestamp = proposalSubmissionTimestamp + 100;
+    await optimisticOracle.setCurrentTime(disputeSubmissionTimestamp);
+    await optimisticOracle
+      .connect(disputer)
+      .disputePrice(eventBasedPredictionMarket.address, identifier, expirationTimestamp, ancillaryData);
+
+    // Check that the price has been re-requested with a new expiration timestamp corresponding to the dispute timestamp.
+    expect(await eventBasedPredictionMarket.expirationTimestamp()).to.equal(disputeSubmissionTimestamp);
+
+    // In the meantime simulate a vote in the DVM in which the originally disputed price is accepted.
+    const disputedPriceRequest = (await mockOracle.queryFilter(mockOracle.filters.PriceRequestAdded()))[0];
+    await mockOracle.pushPrice(identifier, disputedPriceRequest.args.time, disputedPriceRequest.args.ancillaryData, 0);
+
+    // The original price request can be settled since the dispute has been resolved at the DVM by accepting the price originally proposed
+    await optimisticOracle.settle(eventBasedPredictionMarket.address, identifier, expirationTimestamp, ancillaryData);
+    const settled = await eventBasedPredictionMarket.receivedSettlementPrice();
+    expect(settled).to.equal(true);
+
+    // In this case, there are two price requests for the same data that would both return the same price to the EventBasedMarket at the time of the settle.
+    // Make sure that the market can be settled by either one of them, and that the second one can still settle.
+
+    // Check that the price has been settled and Long short tokens can be refunded.
+    const sponsorInitialBalance = await usdc.balanceOf(sponsor.address);
+    await eventBasedPredictionMarket.connect(sponsor).settle(toWei("0"), toWei("100"));
+    expect(await usdc.balanceOf(sponsor.address)).to.equal(sponsorInitialBalance.add(toWei(100)));
+
+    // Finally, the second price request to the OO is proposed and settled.
+    // Check that the settling is possible and doesn't affect the settlement price in the event-based market.
+    const previousSettlePrice = await eventBasedPredictionMarket.settlementPrice();
+    await proposeAndSettleOptimisticOraclePrice(toWei(0));
+    expect(await eventBasedPredictionMarket.settlementPrice()).to.equal(previousSettlePrice);
   });
 });

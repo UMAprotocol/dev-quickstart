@@ -135,7 +135,6 @@ contract EventBasedPredictionMarket is Testable {
         OptimisticOracleV2Interface optimisticOracle = getOptimisticOracle();
         require(msg.sender == address(optimisticOracle), "not authorized");
 
-        require(timestamp == expirationTimestamp, "different timestamps");
         require(identifier == priceIdentifier, "same identifier");
         require(keccak256(ancillaryData) == keccak256(customAncillaryData), "same ancillary data");
 
