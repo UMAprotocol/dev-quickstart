@@ -215,7 +215,7 @@ describe("EventBasedPredictionMarket functions", function () {
     expect(await usdc.balanceOf(sponsor.address)).to.equal(sponsorInitialBalance.add(toWei(100)));
   });
 
-  it("Erroneously disputed price requests can be settled, as well as auto-requested price requests.", async function () {
+  it("Rejected disputed price requests can be settled, as well as auto-requested price requests.", async function () {
     const requestSubmissionTimestamp = await eventBasedPredictionMarket.expirationTimestamp();
     const proposalSubmissionTimestamp = parseInt(requestSubmissionTimestamp.toString()) + 100;
     await optimisticOracle.setCurrentTime(proposalSubmissionTimestamp);
