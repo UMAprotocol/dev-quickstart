@@ -138,6 +138,9 @@ contract EventBasedPredictionMarket is Testable {
         require(identifier == priceIdentifier, "same identifier");
         require(keccak256(ancillaryData) == keccak256(customAncillaryData), "same ancillary data");
 
+        // We only want to process the price if it is for the current price request.
+        if (timestamp != expirationTimestamp) return;
+
         // Calculate the value of settlementPrice using either 0, 0.5e18, or 1e18 as the expiryPrice.
         if (price >= 1e18) {
             settlementPrice = 1e18;

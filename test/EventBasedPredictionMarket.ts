@@ -215,7 +215,7 @@ describe("EventBasedPredictionMarket functions", function () {
     expect(await usdc.balanceOf(sponsor.address)).to.equal(sponsorInitialBalance.add(toWei(100)));
   });
 
-  it("Rejected disputed price requests can be settled, as well as auto-requested price requests.", async function () {
+  it("Rejected disputed price requests are not processed but can settle in OOV2", async function () {
     const requestSubmissionTimestamp = await eventBasedPredictionMarket.expirationTimestamp();
     const proposalSubmissionTimestamp = parseInt(requestSubmissionTimestamp.toString()) + 100;
     await optimisticOracle.setCurrentTime(proposalSubmissionTimestamp);
@@ -248,23 +248,19 @@ describe("EventBasedPredictionMarket functions", function () {
     const disputedPriceRequest = (await mockOracle.queryFilter(mockOracle.filters.PriceRequestAdded()))[0];
     await mockOracle.pushPrice(identifier, disputedPriceRequest.args.time, disputedPriceRequest.args.ancillaryData, 0);
 
-    // The original price request can be settled since the dispute has been resolved at the DVM by accepting the price originally proposed
+    // The original price request is not processed anymore as a second price request has been added.
     await optimisticOracle.settle(eventBasedPredictionMarket.address, identifier, expirationTimestamp, ancillaryData);
     const settled = await eventBasedPredictionMarket.receivedSettlementPrice();
-    expect(settled).to.equal(true);
+    expect(settled).to.equal(false);
 
-    // In this case, there are two price requests for the same data that would both return the same price to the EventBasedMarket at the time of the settle.
-    // Make sure that the market can be settled by either one of them, and that the second one can still settle.
+    // Finally, the second price request to the OO is proposed and settled.
+    const previousSettlePrice = await eventBasedPredictionMarket.settlementPrice();
+    await proposeAndSettleOptimisticOraclePrice(toWei(0));
+    expect(await eventBasedPredictionMarket.settlementPrice()).to.equal(previousSettlePrice);
 
     // Check that the price has been settled and Long short tokens can be refunded.
     const sponsorInitialBalance = await usdc.balanceOf(sponsor.address);
     await eventBasedPredictionMarket.connect(sponsor).settle(toWei("0"), toWei("100"));
     expect(await usdc.balanceOf(sponsor.address)).to.equal(sponsorInitialBalance.add(toWei(100)));
-
-    // Finally, the second price request to the OO is proposed and settled.
-    // Check that the settling is possible and doesn't affect the settlement price in the event-based market.
-    const previousSettlePrice = await eventBasedPredictionMarket.settlementPrice();
-    await proposeAndSettleOptimisticOraclePrice(toWei(0));
-    expect(await eventBasedPredictionMarket.settlementPrice()).to.equal(previousSettlePrice);
   });
 });
