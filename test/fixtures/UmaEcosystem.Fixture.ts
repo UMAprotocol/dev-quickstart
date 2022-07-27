@@ -1,7 +1,7 @@
 import { getContractFactory, utf8ToHex, hre } from "../utils";
 import { proposalLiveness, zeroRawValue, identifier } from "../constants";
 import { interfaceName } from "@uma/common";
-import { OptimisticOracleV2Ethers } from "@uma/contracts-node";
+import { OptimisticOracleV2Ethers, MockOracleAncillaryEthers } from "@uma/contracts-node";
 
 export const umaEcosystemFixture = hre.deployments.createFixture(async ({ ethers }) => {
   const [deployer] = await ethers.getSigners();
@@ -12,9 +12,9 @@ export const umaEcosystemFixture = hre.deployments.createFixture(async ({ ethers
   const collateralWhitelist = await (await getContractFactory("AddressWhitelist", deployer)).deploy();
   const identifierWhitelist = await (await getContractFactory("IdentifierWhitelist", deployer)).deploy();
   const store = await (await getContractFactory("Store", deployer)).deploy(zeroRawValue, zeroRawValue, timer.address);
-  const mockOracle = await (
+  const mockOracle = (await (
     await getContractFactory("MockOracleAncillary", deployer)
-  ).deploy(finder.address, timer.address);
+  ).deploy(finder.address, timer.address)) as MockOracleAncillaryEthers;
   const optimisticOracle = (await (
     await getContractFactory("OptimisticOracleV2", deployer)
   ).deploy(proposalLiveness, finder.address, timer.address)) as OptimisticOracleV2Ethers;
