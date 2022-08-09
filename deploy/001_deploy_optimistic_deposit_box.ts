@@ -16,7 +16,7 @@ const func = async function (hre: HardhatRuntimeEnvironment) {
 
   await deploy("OptimisticDepositBox", {
     from: deployer,
-    args: ["0xbF7A7169562078c96f0eC1A8aFD6aE50f12e5A99", Finder, priceIdentifier, ZERO_ADDRESS],
+    args: ["0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6", Finder, priceIdentifier, ZERO_ADDRESS],
     log: true,
     skipIfAlreadyDeployed: false,
   });
