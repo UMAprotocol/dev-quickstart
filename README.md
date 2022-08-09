@@ -4,7 +4,7 @@ This repo is intended to have scripts and tests available to allow for testing U
 
 ## Install dependencies
 
-You will need to install the long-term support version of nodejs, currently nodejs v14 or v16. You will also need to install yarn.
+You will need to install the long-term support version of nodejs, currently nodejs v16. You will also need to install yarn.
 
 ## Build
 
