@@ -33,7 +33,7 @@ Use the command below to deploy a particular contract (along with any dependenci
 ```sh
 export MNEMONIC="Your 12-word phrase here"
 export CUSTOM_NODE_URL="Your node url here"
-yarn hardhat deploy --network kovan --tags OptimisticDepositBox,EventBasedPredictionMarket
+yarn hardhat deploy --network goerli --tags OptimisticDepositBox,EventBasedPredictionMarket
 ```
 
 ## Contract verification
@@ -43,7 +43,7 @@ To perform an etherscan verification on a particular contract address that you h
 ```sh
 export ETHERSCAN_API_KEY="Your etherscan api key here"
 export CUSTOM_NODE_URL="Your node url here"
-yarn hardhat verify "Your contract address here" --network kovan
+yarn hardhat verify "Your contract address here" --network goerli
 ```
 
 To perform a verification on all the contracts you have deployed on a particular network:
@@ -51,5 +51,5 @@ To perform a verification on all the contracts you have deployed on a particular
 ```sh
 export CUSTOM_NODE_URL="Your node url here"
 export ETHERSCAN_API_KEY="Your etherscan api key here"
-yarn hardhat etherscan-verify --network kovan --license AGPL-3.0 --force-license
+yarn hardhat etherscan-verify --network goerli --license AGPL-3.0 --force-license
 ```
