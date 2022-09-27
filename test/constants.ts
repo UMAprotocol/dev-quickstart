@@ -1,4 +1,4 @@
-import { toWei, utf8ToHex, ethers } from "./utils";
+import { toWei, utf8ToHex } from "./utils";
 
 export { TokenRolesEnum, MIN_INT_VALUE } from "@uma/common";
 
