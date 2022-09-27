@@ -120,7 +120,7 @@ contract InsuranceArbitrator {
         address insuredAddress,
         address currency,
         uint256 insuredAmount
-    ) public returns (bytes32 policyId) {}
+    ) external returns (bytes32 policyId) {}
 
     /**
      * @notice Anyone can submit insurance claim posting oracle bonding. Only one simultaneous claim per insurance
@@ -129,7 +129,7 @@ contract InsuranceArbitrator {
      * `currency` token. This call requests and proposes that `insuredEvent` had ocured through Optimistic Oracle.
      * @param policyId Identifier of claimed insurance policy.
      */
-    function submitClaim(bytes32 policyId) public {}
+    function submitClaim(bytes32 policyId) external {}
 
     /******************************************
      *           CALLBACK FUNCTIONS           *
