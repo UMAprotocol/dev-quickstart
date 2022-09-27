@@ -1,6 +1,6 @@
 import { toWei, utf8ToHex, ethers } from "./utils";
 
-export { TokenRolesEnum } from "@uma/common";
+export { TokenRolesEnum, MIN_INT_VALUE } from "@uma/common";
 
 export const amountToSeedWallets = toWei("1500");
 
