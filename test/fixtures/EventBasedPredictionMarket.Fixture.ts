@@ -2,7 +2,7 @@ import hre from "hardhat";
 import Web3 from "web3";
 import { EventBasedPredictionMarket, ExpandedERC20 } from "../../typechain";
 import { TokenRolesEnum } from "../constants";
-import { getContractFactory } from "../utils";
+import { getContractFactory, SignerWithAddress, BigNumber, Contract } from "../utils";
 import { umaEcosystemFixture } from "./UmaEcosystem.Fixture";
 const { utf8ToHex } = Web3.utils;
 
@@ -43,12 +43,17 @@ export async function deployEventBasedPredictionMarket(ethers: any) {
     await getContractFactory("ExpandedERC20", deployer)
   ).attach(await eventBasedPredictionMarket.shortToken())) as ExpandedERC20;
 
-  return {
-    ...parentFixture,
-    usdc,
-    eventBasedPredictionMarket,
-    deployer,
-    longToken,
-    shortToken,
-  };
+  return { ...parentFixture, usdc, eventBasedPredictionMarket, deployer, longToken, shortToken };
+}
+
+export async function seedAndApprove(
+  accounts: SignerWithAddress[],
+  collateral: Contract,
+  amount: BigNumber,
+  approvedTarget: string
+) {
+  for (const account of accounts) {
+    await collateral.mint(account.address, amount);
+    await collateral.connect(account).approve(approvedTarget, amount);
+  }
 }

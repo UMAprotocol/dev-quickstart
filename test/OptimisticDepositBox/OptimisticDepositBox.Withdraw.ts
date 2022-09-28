@@ -1,20 +1,13 @@
-import { SignerWithAddress, expect, Contract, ethers } from "./utils";
-import { umaEcosystemFixture } from "./fixtures/UmaEcosystem.Fixture";
-import { optimisticDepositBoxFixture } from "./fixtures/OptimisticDepositBox.Fixture";
-import {
-  amountToSeedWallets,
-  amountToDeposit,
-  amountToWithdraw,
-  proposalLiveness,
-  zeroBytes,
-  mockPrice,
-  identifier,
-} from "./constants";
+import { SignerWithAddress, expect, Contract, ethers } from "../utils";
+import { umaEcosystemFixture } from "../fixtures/UmaEcosystem.Fixture";
+import { optimisticDepositBoxFixture } from "../fixtures/OptimisticDepositBox.Fixture";
+import { amountToSeedWallets, amountToDeposit, amountToWithdraw, proposalLiveness } from "../constants";
+import { zeroBytes, mockPrice, identifier } from "../constants";
 
 let optimisticDepositBox: Contract, usdc: Contract, timer: Contract, optimisticOracle: Contract;
 let deployer: SignerWithAddress, depositor: SignerWithAddress, proposer: SignerWithAddress;
 
-describe("Optimistic Deposit Box Withdraw functions", function () {
+describe("Optimistic Deposit Box: Withdraw", function () {
   beforeEach(async function () {
     [deployer, depositor, proposer] = await ethers.getSigners();
     ({ timer, optimisticOracle } = await umaEcosystemFixture());
