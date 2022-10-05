@@ -6,18 +6,18 @@ export const proposeAndSettleOptimisticOraclePrice = async (
 ) => {
   const ancillaryData = await eventBasedPredictionMarket.customAncillaryData();
   const identifier = await eventBasedPredictionMarket.priceIdentifier();
-  const expirationTimestamp = await eventBasedPredictionMarket.expirationTimestamp();
+  const requestTimestamp = await eventBasedPredictionMarket.requestTimestamp();
   const optimisticOracleLivenessTime = await eventBasedPredictionMarket.optimisticOracleLivenessTime();
 
   await optimisticOracle.proposePrice(
     eventBasedPredictionMarket.address,
     identifier,
-    expirationTimestamp,
+    requestTimestamp,
     ancillaryData,
     price
   );
 
   await optimisticOracle.setCurrentTime((await optimisticOracle.getCurrentTime()).add(optimisticOracleLivenessTime));
 
-  await optimisticOracle.settle(eventBasedPredictionMarket.address, identifier, expirationTimestamp, ancillaryData);
+  await optimisticOracle.settle(eventBasedPredictionMarket.address, identifier, requestTimestamp, ancillaryData);
 };
