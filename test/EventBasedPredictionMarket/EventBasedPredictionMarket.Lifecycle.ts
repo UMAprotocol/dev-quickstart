@@ -80,13 +80,13 @@ describe("EventBasedPredictionMarket: Lifecycle", function () {
   it("Early expiring is not allowed", async function () {
     const ancillaryData = await eventBasedPredictionMarket.customAncillaryData();
     const identifier = await eventBasedPredictionMarket.priceIdentifier();
-    const expirationTimestamp = await eventBasedPredictionMarket.expirationTimestamp();
+    const requestTimestamp = await eventBasedPredictionMarket.requestTimestamp();
 
     await expect(
       optimisticOracle.proposePrice(
         eventBasedPredictionMarket.address,
         identifier,
-        expirationTimestamp,
+        requestTimestamp,
         ancillaryData,
         MIN_INT_VALUE
       )

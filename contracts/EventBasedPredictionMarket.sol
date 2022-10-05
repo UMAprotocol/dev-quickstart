@@ -20,7 +20,7 @@ contract EventBasedPredictionMarket is Testable {
     bool public priceRequested;
     bool public receivedSettlementPrice;
 
-    uint256 public expirationTimestamp;
+    uint256 public requestTimestamp;
     string public pairName;
 
     // Number between 0 and 1e18 to allocate collateral between long & short tokens at redemption. 0 entitles each short
@@ -57,9 +57,7 @@ contract EventBasedPredictionMarket is Testable {
      ****************************************/
 
     modifier hasPrice() {
-        require(
-            getOptimisticOracle().hasPrice(address(this), priceIdentifier, expirationTimestamp, customAncillaryData)
-        );
+        require(getOptimisticOracle().hasPrice(address(this), priceIdentifier, requestTimestamp, customAncillaryData));
         _;
     }
 
@@ -92,7 +90,7 @@ contract EventBasedPredictionMarket is Testable {
         customAncillaryData = _customAncillaryData;
         pairName = _pairName;
 
-        expirationTimestamp = getCurrentTime(); // Set the request timestamp to the current block timestamp.
+        requestTimestamp = getCurrentTime(); // Set the request timestamp to the current block timestamp.
         // Holding long tokens gives the owner exposure to the long position,
         // i.e. the case where the answer to the prediction market question is YES.
         longToken = new ExpandedERC20(string(abi.encodePacked(_pairName, " Long Token")), "PLT", 18);
@@ -139,7 +137,7 @@ contract EventBasedPredictionMarket is Testable {
         require(keccak256(ancillaryData) == keccak256(customAncillaryData), "same ancillary data");
 
         // We only want to process the price if it is for the current price request.
-        if (timestamp != expirationTimestamp) return;
+        if (timestamp != requestTimestamp) return;
 
         // Calculate the value of settlementPrice using either 0, 0.5e18, or 1e18 as the expiryPrice.
         if (price >= 1e18) {
@@ -169,8 +167,8 @@ contract EventBasedPredictionMarket is Testable {
         OptimisticOracleV2Interface optimisticOracle = getOptimisticOracle();
         require(msg.sender == address(optimisticOracle), "not authorized");
 
-        expirationTimestamp = getCurrentTime();
-        require(timestamp <= expirationTimestamp, "different timestamps");
+        requestTimestamp = getCurrentTime();
+        require(timestamp <= requestTimestamp, "different timestamps");
         require(identifier == priceIdentifier, "same identifier");
         require(keccak256(ancillaryData) == keccak256(customAncillaryData), "same ancillary data");
         require(refund == proposerReward, "same proposerReward amount");
@@ -250,7 +248,7 @@ contract EventBasedPredictionMarket is Testable {
 
         optimisticOracle.requestPrice(
             priceIdentifier,
-            expirationTimestamp,
+            requestTimestamp,
             customAncillaryData,
             collateralToken,
             proposerReward
@@ -259,24 +257,19 @@ contract EventBasedPredictionMarket is Testable {
         // Set the Optimistic oracle liveness for the price request.
         optimisticOracle.setCustomLiveness(
             priceIdentifier,
-            expirationTimestamp,
+            requestTimestamp,
             customAncillaryData,
             optimisticOracleLivenessTime
         );
 
         // Set the Optimistic oracle proposer bond for the price request.
-        optimisticOracle.setBond(
-            priceIdentifier,
-            expirationTimestamp,
-            customAncillaryData,
-            optimisticOracleProposerBond
-        );
+        optimisticOracle.setBond(priceIdentifier, requestTimestamp, customAncillaryData, optimisticOracleProposerBond);
 
         // Make the request an event-based request.
-        optimisticOracle.setEventBased(priceIdentifier, expirationTimestamp, customAncillaryData);
+        optimisticOracle.setEventBased(priceIdentifier, requestTimestamp, customAncillaryData);
 
         // Enable the priceDisputed and priceSettled callback
-        optimisticOracle.setCallbacks(priceIdentifier, expirationTimestamp, customAncillaryData, false, true, true);
+        optimisticOracle.setCallbacks(priceIdentifier, requestTimestamp, customAncillaryData, false, true, true);
 
         priceRequested = true;
     }
