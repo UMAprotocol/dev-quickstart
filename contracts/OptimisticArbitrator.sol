@@ -4,15 +4,15 @@ pragma solidity ^0.8.16;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import "../../interfaces/StoreInterface.sol";
-import "../../interfaces/OracleAncillaryInterface.sol";
-import "../../interfaces/FinderInterface.sol";
-import "../../interfaces/IdentifierWhitelistInterface.sol";
-import "../../interfaces/OptimisticOracleV2Interface.sol";
+import "@uma/core/contracts/oracle/interfaces/StoreInterface.sol";
+import "@uma/core/contracts/oracle/interfaces/OracleAncillaryInterface.sol";
+import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
+import "@uma/core/contracts/oracle/interfaces/IdentifierWhitelistInterface.sol";
+import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
 
-import "../../../common/implementation/AncillaryData.sol";
-import "../../../common/implementation/AddressWhitelist.sol";
-import "../Constants.sol";
+import "@uma/core/contracts/common/implementation/AncillaryData.sol";
+import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
+import "@uma/core/contracts/oracle/implementation/Constants.sol";
 
 contract OptimisticArbitrator {
     using SafeERC20 for IERC20;
