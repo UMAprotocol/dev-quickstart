@@ -1,59 +1,53 @@
-// import hre from "hardhat";
-// import Web3 from "web3";
-// import { EventBasedPredictionMarket, ExpandedERC20 } from "../../typechain";
-// import { TokenRolesEnum } from "../constants";
-// import { getContractFactory, SignerWithAddress, BigNumber, Contract } from "../utils";
-// import { umaEcosystemFixture } from "./UmaEcosystem.Fixture";
-// const { utf8ToHex } = Web3.utils;
+import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import { BigNumber, Contract } from "ethers";
+import hre from "hardhat";
+import { OptimisticArbitrator__factory } from "../../typechain";
+import { TokenRolesEnum } from "../constants";
 
-// export const optimisticArbitratorFixture = hre.deployments.createFixture(async ({ ethers }) => {
-//   return await deployOptimisticArbitrator(ethers);
-// });
+import { umaEcosystemFixture } from "./UmaEcosystem.Fixture";
 
-// export async function deployOptimisticArbitrator(ethers: Ethers) {
-//   const [deployer] = await ethers.getSigners();
+const { getContractFactory } = hre.ethers;
 
-//   // This fixture is dependent on the UMA ecosystem fixture. Run it first and grab the output. This is used in the
-//   // deployments that follows. The output is spread when returning contract instances from this fixture.
-//   const parentFixture = await umaEcosystemFixture();
+export const optimisticArbitratorFixture = hre.deployments.createFixture(async ({ ethers }) => {
+  return await deployOptimisticArbitrator(ethers);
+});
 
-//   // deploys collateral for EventBasedPredictionMarket contract
-//   const usdc = await (await getContractFactory("ExpandedERC20", deployer)).deploy("USD Coin", "USDC", 6);
-//   await usdc.addMember(TokenRolesEnum.MINTER, deployer.address);
+export async function deployOptimisticArbitrator(ethers: typeof hre.ethers) {
+  const [deployer] = await ethers.getSigners();
 
-//   // Sets collateral as approved in the UMA collateralWhitelist.
-//   await parentFixture.collateralWhitelist.addToWhitelist(usdc.address);
+  // This fixture is dependent on the UMA ecosystem fixture. Run it first and grab the output. This is used in the
+  // deployments that follows. The output is spread when returning contract instances from this fixture.
+  const parentFixture = await umaEcosystemFixture();
 
-//   // Deploy the EventBasedPredictionMarket contract.
-//   const eventBasedPredictionMarket = (await (
-//     await getContractFactory("EventBasedPredictionMarket", deployer)
-//   ).deploy(
-//     "XYZ",
-//     usdc.address,
-//     utf8ToHex("when X happens, will the price of Y equal Z?"),
-//     parentFixture.finder.address,
-//     parentFixture.timer.address
-//   )) as EventBasedPredictionMarket;
+  // deploys collateral for OptimisticArbitrator contract
+  const usdc = await (await getContractFactory("ExpandedERC20", deployer)).deploy("USD Coin", "USDC", 6);
+  await usdc.addMember(TokenRolesEnum.MINTER, deployer.address);
 
-//   // connect to existing ExpandedERC20 contract with ether
-//   const longToken = (await (
-//     await getContractFactory("ExpandedERC20", deployer)
-//   ).attach(await eventBasedPredictionMarket.longToken())) as ExpandedERC20;
-//   const shortToken = (await (
-//     await getContractFactory("ExpandedERC20", deployer)
-//   ).attach(await eventBasedPredictionMarket.shortToken())) as ExpandedERC20;
+  // Sets collateral as approved in the UMA collateralWhitelist.
+  await parentFixture.collateralWhitelist.addToWhitelist(usdc.address);
 
-//   return { ...parentFixture, usdc, eventBasedPredictionMarket, deployer, longToken, shortToken };
-// }
+  // Deploy the OptimisticArbitrator contract.
+  const optimisticArbitratorFactory: OptimisticArbitrator__factory = await getContractFactory(
+    "OptimisticArbitrator",
+    deployer
+  );
 
-// export async function seedAndApprove(
-//   accounts: SignerWithAddress[],
-//   collateral: Contract,
-//   amount: BigNumber,
-//   approvedTarget: string
-// ) {
-//   for (const account of accounts) {
-//     await collateral.mint(account.address, amount);
-//     await collateral.connect(account).approve(approvedTarget, amount);
-//   }
-// }
+  const optimisticArbitrator = await optimisticArbitratorFactory.deploy(
+    parentFixture.finder.address,
+    parentFixture.timer.address
+  );
+
+  return { ...parentFixture, usdc, optimisticArbitrator, deployer };
+}
+
+export async function seedAndApprove(
+  accounts: SignerWithAddress[],
+  collateral: Contract,
+  amount: BigNumber,
+  approvedTarget: string
+) {
+  for (const account of accounts) {
+    await collateral.mint(account.address, amount);
+    await collateral.connect(account).approve(approvedTarget, amount);
+  }
+}
