@@ -85,7 +85,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     );
 
     // Proposer proposes a no anwser
-    await optimisticArbitrator.proposePrice(requestTimestamp, ancillaryData, 2);
+    await optimisticArbitrator.proposePrice(requestTimestamp, ancillaryData, 0);
 
     // Disputer disputes the proposal
     await optimisticArbitrator.disputePrice(requestTimestamp, ancillaryData);
