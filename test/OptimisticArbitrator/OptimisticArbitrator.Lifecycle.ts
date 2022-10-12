@@ -73,7 +73,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
 
     const balanceBefore = await usdc.balanceOf(requester.address);
 
-    const bond = hre.ethers.utils.parseUnits("500", await usdc.decimals());
+    const bond = hre.ethers.utils.parseUnits("0", await usdc.decimals());
 
     await optimisticArbitrator.requestPrice(
       requestTimestamp,
