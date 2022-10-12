@@ -25,7 +25,7 @@ export const umaEcosystemFixture = hre.deployments.createFixture(async ({ ethers
   await finder.changeImplementationAddress(utf8ToHex(interfaceName.CollateralWhitelist), collateralWhitelist.address);
   await finder.changeImplementationAddress(utf8ToHex(interfaceName.IdentifierWhitelist), identifierWhitelist.address);
   await finder.changeImplementationAddress(utf8ToHex(interfaceName.Store), store.address);
-  await finder.changeImplementationAddress(utf8ToHex("OptimisticOracleV2"), optimisticOracle.address); // TODO interfaceName.OptimisticOracleV2
+  await finder.changeImplementationAddress(utf8ToHex(interfaceName.OptimisticOracleV2), optimisticOracle.address);
   await finder.changeImplementationAddress(utf8ToHex(interfaceName.Oracle), mockOracle.address);
 
   // Set up other required UMA ecosystem components.

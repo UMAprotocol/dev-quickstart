@@ -32,7 +32,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
   });
 
   it("Happy path", async function () {
-    const currentTime = await optimisticArbitrator.getCurrentTime();
+    const requestTimestamp = await optimisticArbitrator.getCurrentTime();
     const customLiveness = 3600; // 1 hour
 
     const ancillaryData = ethers.utils.toUtf8Bytes(
@@ -40,7 +40,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     );
 
     await optimisticArbitrator.requestPrice(
-      currentTime,
+      requestTimestamp,
       ancillaryData,
       usdc.address,
       hre.ethers.utils.parseUnits("20", await usdc.decimals()),
@@ -49,7 +49,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     );
 
     // Proposer proposes a yes answer.
-    const tx = await optimisticArbitrator.proposePrice(currentTime, ancillaryData, 1);
+    const tx = await optimisticArbitrator.proposePrice(requestTimestamp, ancillaryData, 1);
     const receipt = await tx.wait();
 
     const block = await ethers.provider.getBlock(receipt.blockNumber);
@@ -57,12 +57,67 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     // Set time after liveness
     await optimisticArbitrator.setCurrentTime(block.timestamp + customLiveness);
 
-    // static call arbitrator settleAndGetPrice
-    const price = await optimisticArbitrator.callStatic.settleAndGetPrice(currentTime, ancillaryData, {
-      from: requester.address,
-    });
+    // Settle and get price
+    await optimisticArbitrator.settleAndGetPrice(requestTimestamp, ancillaryData);
 
-    // price should be 1
-    expect(price).to.equal(1);
+    expect((await optimisticArbitrator.getPrice(requestTimestamp, ancillaryData)).toNumber()).to.equal(1);
+  });
+
+  it("Dispute with dvm arbitration", async function () {
+    const requestTimestamp = await optimisticArbitrator.getCurrentTime();
+    const customLiveness = 3600; // 1 hour
+
+    const ancillaryData = ethers.utils.toUtf8Bytes(
+      `q: title: Will the price of BTC be $18000.00 or more on October 10, 2022?, description: More info. res_data: p1: 0, p2: 1, p3: 0.5, p4: -57896044618658097711785492504343953926634992332820282019728.792003956564819968. Where p1 corresponds to No, p2 to a Yes, p3 to unknown/tie, and p4 to an early request`
+    );
+
+    const balanceBefore = await usdc.balanceOf(requester.address);
+
+    const bond = hre.ethers.utils.parseUnits("500", await usdc.decimals());
+
+    await optimisticArbitrator.requestPrice(
+      requestTimestamp,
+      ancillaryData,
+      usdc.address,
+      hre.ethers.utils.parseUnits("20", await usdc.decimals()),
+      bond,
+      customLiveness
+    );
+
+    // Proposer proposes a no anwser
+    await optimisticArbitrator.proposePrice(requestTimestamp, ancillaryData, 2);
+
+    // Disputer disputes the proposal
+    await optimisticArbitrator.disputePrice(requestTimestamp, ancillaryData);
+
+    // In the meantime simulate a vote in the DVM in which the originally disputed price is accepted.
+    const disputedPriceRequest = (await mockOracle.queryFilter(mockOracle.filters.PriceRequestAdded()))[0];
+    const tx = await mockOracle.pushPrice(
+      disputedPriceRequest.args.identifier,
+      disputedPriceRequest.args.time,
+      disputedPriceRequest.args.ancillaryData,
+      0
+    );
+    const receipt = await tx.wait();
+
+    // Set time after liveness
+    const block = await ethers.provider.getBlock(receipt.blockNumber);
+    await optimisticArbitrator.setCurrentTime(block.timestamp + (await optimisticOracle.defaultLiveness()).toNumber());
+
+    // Dispute is resolved by the DVM
+    await optimisticOracle.settle(
+      optimisticArbitrator.address,
+      await optimisticArbitrator.priceIdentifier(),
+      requestTimestamp,
+      ancillaryData
+    );
+
+    const storeFinalFee = await store.computeFinalFee(usdc.address);
+
+    const finalCost = storeFinalFee.rawValue.add(bond.div(2));
+
+    expect(finalCost).to.equal(balanceBefore.sub(await usdc.balanceOf(requester.address)));
+
+    expect(finalCost).to.equal(await usdc.balanceOf(store.address));
   });
 });
