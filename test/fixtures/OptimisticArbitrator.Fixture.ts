@@ -1,5 +1,4 @@
-import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { BigNumber, Contract } from "ethers";
+import { ExpandedERC20Ethers } from "@uma/contracts-node";
 import hre from "hardhat";
 import { OptimisticArbitrator__factory } from "../../typechain";
 import { TokenRolesEnum } from "../constants";
@@ -20,7 +19,9 @@ export async function deployOptimisticArbitrator(ethers: typeof hre.ethers) {
   const parentFixture = await umaEcosystemFixture();
 
   // deploys collateral for OptimisticArbitrator contract
-  const usdc = await (await getContractFactory("ExpandedERC20", deployer)).deploy("USD Coin", "USDC", 6);
+  const usdc = (await (
+    await getContractFactory("ExpandedERC20", deployer)
+  ).deploy("USD Coin", "USDC", 6)) as ExpandedERC20Ethers;
   await usdc.addMember(TokenRolesEnum.MINTER, deployer.address);
 
   // Sets collateral as approved in the UMA collateralWhitelist.
@@ -38,16 +39,4 @@ export async function deployOptimisticArbitrator(ethers: typeof hre.ethers) {
   );
 
   return { ...parentFixture, usdc, optimisticArbitrator, deployer };
-}
-
-export async function seedAndApprove(
-  accounts: SignerWithAddress[],
-  collateral: Contract,
-  amount: BigNumber,
-  approvedTarget: string
-) {
-  for (const account of accounts) {
-    await collateral.mint(account.address, amount);
-    await collateral.connect(account).approve(approvedTarget, amount);
-  }
 }
