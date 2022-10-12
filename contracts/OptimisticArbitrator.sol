@@ -101,7 +101,11 @@ contract OptimisticArbitrator is Testable {
         request.currency.safeTransferFrom(msg.sender, address(this), request.bond + request.finalFee);
 
         OptimisticOracleV2Interface oo = _getOptimisticOracle();
+
+        request.currency.approve(address(oo), 2 * (request.bond + request.finalFee) + request.reward);
+
         oo.requestPrice(priceIdentifier, timestamp, ancillaryData, request.currency, request.reward);
+        oo.setBond(priceIdentifier, timestamp, ancillaryData, request.bond);
         oo.proposePriceFor(
             request.proposer,
             address(this),
@@ -129,7 +133,7 @@ contract OptimisticArbitrator is Testable {
         return request.proposedPrice;
     }
 
-    function getPrice(uint256 timestamp, bytes memory ancillaryData) public returns (int256) {
+    function getPrice(uint256 timestamp, bytes memory ancillaryData) public view returns (int256) {
         Request storage request = requests[_getId(msg.sender, priceIdentifier, timestamp, ancillaryData)];
         require(request.settled == true, "Request not settled");
         return request.proposedPrice;
