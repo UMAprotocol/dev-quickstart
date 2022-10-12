@@ -13,8 +13,9 @@ import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
 import "@uma/core/contracts/common/implementation/AncillaryData.sol";
 import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
+import "@uma/core/contracts/common/implementation/Testable.sol";
 
-contract OptimisticArbitrator {
+contract OptimisticArbitrator is Testable {
     using SafeERC20 for IERC20;
 
     struct Request {
@@ -32,16 +33,17 @@ contract OptimisticArbitrator {
 
     FinderInterface public finder;
 
+    bytes32 public priceIdentifier = "YES_OR_NO_QUERY";
+
     uint256 public constant OO_ANCILLARY_DATA_LIMIT = 8139; // 8192 - 53
 
-    constructor(address _finderAddress, address _timerAddress) {
+    constructor(address _finderAddress, address _timerAddress) Testable(_timerAddress) {
         finder = FinderInterface(_finderAddress);
     }
 
     mapping(bytes32 => Request) public requests;
 
     function requestPrice(
-        bytes32 identifier,
         uint256 timestamp,
         bytes memory ancillaryData,
         IERC20 currency,
@@ -49,9 +51,9 @@ contract OptimisticArbitrator {
         uint256 bond,
         uint64 customLiveness
     ) public {
-        bytes32 requestId = _getId(msg.sender, identifier, timestamp, ancillaryData);
+        bytes32 requestId = _getId(msg.sender, priceIdentifier, timestamp, ancillaryData);
         if (requests[requestId].proposer != address(0)) return; // If the address is already initialized return early.
-        require(_getIdentifierWhitelist().isIdentifierSupported(identifier), "Unsupported identifier");
+        require(_getIdentifierWhitelist().isIdentifierSupported(priceIdentifier), "Unsupported identifier");
         require(_getCollateralWhitelist().isOnWhitelist(address(currency)), "Unsupported currency");
         require(timestamp <= getCurrentTime(), "Timestamp in future");
         require(ancillaryData.length <= OO_ANCILLARY_DATA_LIMIT, "Ancillary Data too long");
@@ -73,12 +75,11 @@ contract OptimisticArbitrator {
     }
 
     function proposePrice(
-        bytes32 identifier,
         uint256 timestamp,
         bytes memory ancillaryData,
         int256 proposedPrice
     ) public {
-        Request storage request = requests[_getId(msg.sender, identifier, timestamp, ancillaryData)];
+        Request storage request = requests[_getId(msg.sender, priceIdentifier, timestamp, ancillaryData)];
         require(address(request.currency) != address(0), "Price not requested");
         require(request.proposer == address(0), "Current proposal in liveness");
 
@@ -89,12 +90,8 @@ contract OptimisticArbitrator {
         request.currency.safeTransferFrom(msg.sender, address(this), request.bond + request.finalFee);
     }
 
-    function disputePrice(
-        bytes32 identifier,
-        uint256 timestamp,
-        bytes memory ancillaryData
-    ) public {
-        Request storage request = requests[_getId(msg.sender, identifier, timestamp, ancillaryData)];
+    function disputePrice(uint256 timestamp, bytes memory ancillaryData) public {
+        Request storage request = requests[_getId(msg.sender, priceIdentifier, timestamp, ancillaryData)];
         require(request.proposer != address(0), "No proposed price to dispute");
         require(request.disputer == address(0), "Proposal already disputed");
         require(uint64(getCurrentTime()) < request.expirationTime, "Proposal past liveness");
@@ -104,26 +101,22 @@ contract OptimisticArbitrator {
         request.currency.safeTransferFrom(msg.sender, address(this), request.bond + request.finalFee);
 
         OptimisticOracleV2Interface oo = _getOptimisticOracle();
-        oo.requestPrice(identifier, timestamp, ancillaryData, request.currency, request.reward);
+        oo.requestPrice(priceIdentifier, timestamp, ancillaryData, request.currency, request.reward);
         oo.proposePriceFor(
             request.proposer,
             address(this),
-            identifier,
+            priceIdentifier,
             timestamp,
             ancillaryData,
             request.proposedPrice
         );
-        oo.disputePriceFor(msg.sender, address(this), identifier, timestamp, ancillaryData);
+        oo.disputePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData);
 
-        delete requests[_getId(msg.sender, identifier, timestamp, ancillaryData)];
+        delete requests[_getId(msg.sender, priceIdentifier, timestamp, ancillaryData)];
     }
 
-    function settleAndGetPrice(
-        bytes32 identifier,
-        uint256 timestamp,
-        bytes memory ancillaryData
-    ) public returns (int256) {
-        Request storage request = requests[_getId(msg.sender, identifier, timestamp, ancillaryData)];
+    function settleAndGetPrice(uint256 timestamp, bytes memory ancillaryData) public returns (int256) {
+        Request storage request = requests[_getId(msg.sender, priceIdentifier, timestamp, ancillaryData)];
         require(address(request.currency) != address(0), "Price not requested");
         require(request.proposer != address(0), "No proposed price to settle");
         require(uint64(getCurrentTime()) > request.expirationTime, "Proposal not passed liveness");
@@ -131,27 +124,15 @@ contract OptimisticArbitrator {
 
         request.settled = true;
 
-        request.currency.safeTransferFrom(
-            address(this),
-            request.proposer,
-            request.bond + request.finalFee + request.reward
-        );
+        request.currency.safeTransfer(request.proposer, request.bond + request.finalFee + request.reward);
 
         return request.proposedPrice;
     }
 
-    function getPrice(
-        bytes32 identifier,
-        uint256 timestamp,
-        bytes memory ancillaryData
-    ) public returns (int256) {
-        Request storage request = requests[_getId(msg.sender, identifier, timestamp, ancillaryData)];
+    function getPrice(uint256 timestamp, bytes memory ancillaryData) public returns (int256) {
+        Request storage request = requests[_getId(msg.sender, priceIdentifier, timestamp, ancillaryData)];
         require(request.settled == true, "Request not settled");
         return request.proposedPrice;
-    }
-
-    function getCurrentTime() public view virtual returns (uint256) {
-        return block.timestamp;
     }
 
     function _getId(
