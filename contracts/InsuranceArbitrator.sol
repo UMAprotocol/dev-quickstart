@@ -19,16 +19,11 @@ contract InsuranceArbitrator {
 
     // Stores state and parameters of insurance policy.
     struct InsurancePolicy {
-        // Claim state preventing simultaneous claim attempts.
-        bool claimInitiated;
-        // Short description of insured event.
-        string insuredEvent;
-        // Beneficiary address eligible for insurance compensation.
-        address insuredAddress;
-        // Denomination token for insurance coverage.
-        address currency;
-        // Amount of insurance coverage.
-        uint256 insuredAmount;
+        bool claimInitiated; // Claim state preventing simultaneous claim attempts.
+        string insuredEvent; // Short description of insured event.
+        address insuredAddress; // Beneficiary address eligible for insurance compensation.
+        address currency; // Denomination token for insurance coverage.
+        uint256 insuredAmount; // Amount of insurance coverage.
     }
 
     // References all active insurance policies by policyId.
