@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
+import "@uma/core/contracts/oracle/implementation/Constants.sol";
 import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
 
 /**
@@ -13,6 +18,8 @@ import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
  * active ready for the subsequent claim attempts.
  */
 contract InsuranceArbitrator {
+    using SafeERC20 for IERC20;
+
     /******************************************
      *  STATE VARIABLES AND DATA STRUCTURES   *
      ******************************************/
@@ -22,7 +29,7 @@ contract InsuranceArbitrator {
         bool claimInitiated; // Claim state preventing simultaneous claim attempts.
         string insuredEvent; // Short description of insured event.
         address insuredAddress; // Beneficiary address eligible for insurance compensation.
-        address currency; // Denomination token for insurance coverage.
+        IERC20 currency; // Denomination token for insurance coverage.
         uint256 insuredAmount; // Amount of insurance coverage.
     }
 
@@ -50,6 +57,8 @@ contract InsuranceArbitrator {
     // Finder for UMA contracts.
     FinderInterface public finder;
 
+    uint256 constant MAX_EVENT_DESCRIPTION_SIZE = 300; // Insured event description should be concise.
+
     /****************************************
      *                EVENTS                *
      ****************************************/
@@ -59,7 +68,7 @@ contract InsuranceArbitrator {
         address indexed insurer,
         string insuredEvent,
         address indexed insuredAddress,
-        address currency,
+        IERC20 currency,
         uint256 insuredAmount
     );
     event ClaimSubmitted(
@@ -68,7 +77,7 @@ contract InsuranceArbitrator {
         address indexed insurer,
         string insuredEvent,
         address indexed insuredAddress,
-        address currency,
+        IERC20 currency,
         uint256 insuredAmount
     );
     event ClaimAccepted(
@@ -77,7 +86,7 @@ contract InsuranceArbitrator {
         address indexed insurer,
         string insuredEvent,
         address indexed insuredAddress,
-        address currency,
+        IERC20 currency,
         uint256 insuredAmount
     );
     event ClaimRejected(
@@ -86,7 +95,7 @@ contract InsuranceArbitrator {
         address indexed insurer,
         string insuredEvent,
         address indexed insuredAddress,
-        address currency,
+        IERC20 currency,
         uint256 insuredAmount
     );
 
@@ -115,9 +124,26 @@ contract InsuranceArbitrator {
     function issueInsurance(
         string calldata insuredEvent,
         address insuredAddress,
-        address currency,
+        IERC20 currency,
         uint256 insuredAmount
-    ) external returns (bytes32 policyId) {}
+    ) external returns (bytes32 policyId) {
+        require(bytes(insuredEvent).length <= MAX_EVENT_DESCRIPTION_SIZE, "Event description too long");
+        require(insuredAddress != address(0), "Invalid insured address");
+        require(_getCollateralWhitelist().isOnWhitelist(address(currency)), "Unsupported currency");
+        require(insuredAmount > 0, "Amount should be above 0");
+        policyId = _getPolicyId(block.number, insuredEvent, insuredAddress, currency, insuredAmount);
+        require(insurancePolicies[policyId].insuredAddress == address(0), "Policy already issued");
+
+        InsurancePolicy storage newPolicy = insurancePolicies[policyId];
+        newPolicy.insuredEvent = insuredEvent;
+        newPolicy.insuredAddress = insuredAddress;
+        newPolicy.currency = currency;
+        newPolicy.insuredAmount = insuredAmount;
+
+        currency.safeTransferFrom(msg.sender, address(this), insuredAmount);
+
+        emit PolicyIssued(policyId, msg.sender, insuredEvent, insuredAddress, currency, insuredAmount);
+    }
 
     /**
      * @notice Anyone can submit insurance claim posting oracle bonding. Only one simultaneous claim per insurance
@@ -147,4 +173,22 @@ contract InsuranceArbitrator {
         bytes memory ancillaryData,
         int256 price
     ) external {}
+
+    /******************************************
+     *           INTERNAL FUNCTIONS           *
+     ******************************************/
+
+    function _getCollateralWhitelist() internal view returns (AddressWhitelist) {
+        return AddressWhitelist(finder.getImplementationAddress(OracleInterfaces.CollateralWhitelist));
+    }
+
+    function _getPolicyId(
+        uint256 blockNumber,
+        string memory insuredEvent,
+        address insuredAddress,
+        IERC20 currency,
+        uint256 insuredAmount
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encode(blockNumber, insuredEvent, insuredAddress, currency, insuredAmount));
+    }
 }
