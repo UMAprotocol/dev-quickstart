@@ -31,10 +31,10 @@ contract InsuranceArbitrator {
         uint256 insuredAmount;
     }
 
-    // References all active insurance policies by `policyId`.
+    // References all active insurance policies by policyId.
     mapping(bytes32 => InsurancePolicy) insurancePolicies;
 
-    // Maps hash of initiated claims to their `policyId`.
+    // Maps hash of initiated claims to their policyId.
     // This is used in callback function to potentially pay out the beneficiary.
     mapping(bytes32 => bytes32) insuranceClaims;
 
@@ -47,7 +47,7 @@ contract InsuranceArbitrator {
     // Price identifier to use when requesting claims through Optimistic Oracle.
     bytes32 constant priceIdentifier = "YES_OR_NO_QUERY";
 
-    // Template for constructing ancillary data. The claim would insert `insuredEvent` in between when requesting
+    // Template for constructing ancillary data. The claim would insert insuredEvent in between when requesting
     // through Optimistic Oracle.
     string constant ancillaryDataHead = 'q:"Had the following insured event occurred as of request timestamp: ';
     string constant ancillaryDataTail = '?"';
@@ -106,8 +106,8 @@ contract InsuranceArbitrator {
      ******************************************/
 
     /**
-     * @notice Deposits `insuredAmount` from the insurer and issues insurance policy to the insured beneficiary.
-     * @dev This contract must be approved to spend at least `insuredAmount` of `currency` token.
+     * @notice Deposits insuredAmount from the insurer and issues insurance policy to the insured beneficiary.
+     * @dev This contract must be approved to spend at least insuredAmount of currency token.
      * @param insuredEvent short description of insured event. Potential verifiers should be able to evaluate whether
      * this event had occurred as of claim time with binary yes/no answer.
      * @param insuredAddress Beneficiary address eligible for insurance compensation.
@@ -125,8 +125,8 @@ contract InsuranceArbitrator {
     /**
      * @notice Anyone can submit insurance claim posting oracle bonding. Only one simultaneous claim per insurance
      * policy is allowed.
-     * @dev This contract must be approved to spend at least `insuredAmount` * `oracleBondPercentage` + `finalFee` of
-     * `currency` token. This call requests and proposes that `insuredEvent` had ocured through Optimistic Oracle.
+     * @dev This contract must be approved to spend at least (insuredAmount * oracleBondPercentage + finalFee) of
+     * currency token. This call requests and proposes that insuredEvent had ocured through Optimistic Oracle.
      * @param policyId Identifier of claimed insurance policy.
      */
     function submitClaim(bytes32 policyId) external {}
