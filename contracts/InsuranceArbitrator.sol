@@ -54,7 +54,7 @@ contract InsuranceArbitrator {
      *                EVENTS                *
      ****************************************/
 
-    event policyIssued(
+    event PolicyIssued(
         bytes32 indexed policyId,
         address indexed insurer,
         string insuredEvent,
@@ -62,7 +62,7 @@ contract InsuranceArbitrator {
         address currency,
         uint256 insuredAmount
     );
-    event claimSubmitted(
+    event ClaimSubmitted(
         uint256 claimTimestamp,
         bytes32 indexed policyId,
         address indexed insurer,
@@ -71,7 +71,7 @@ contract InsuranceArbitrator {
         address currency,
         uint256 insuredAmount
     );
-    event claimAccepted(
+    event ClaimAccepted(
         uint256 claimTimestamp,
         bytes32 indexed policyId,
         address indexed insurer,
@@ -80,7 +80,7 @@ contract InsuranceArbitrator {
         address currency,
         uint256 insuredAmount
     );
-    event claimRejected(
+    event ClaimRejected(
         uint256 claimTimestamp,
         bytes32 indexed policyId,
         address indexed insurer,
