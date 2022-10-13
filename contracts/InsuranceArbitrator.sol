@@ -34,20 +34,20 @@ contract InsuranceArbitrator {
     }
 
     // References all active insurance policies by policyId.
-    mapping(bytes32 => InsurancePolicy) insurancePolicies;
+    mapping(bytes32 => InsurancePolicy) public insurancePolicies;
 
     // Maps hash of initiated claims to their policyId.
     // This is used in callback function to potentially pay out the beneficiary.
-    mapping(bytes32 => bytes32) insuranceClaims;
+    mapping(bytes32 => bytes32) public insuranceClaims;
 
     // Oracle proposal bond set to 0.1% of claimed insurance coverage.
-    uint256 constant oracleBondPercentage = 10e15;
+    uint256 public constant oracleBondPercentage = 10e15;
 
     // Optimistic oracle liveness set to 24h.
-    uint256 constant optimisticOracleLivenessTime = 3600 * 24;
+    uint256 public constant optimisticOracleLivenessTime = 3600 * 24;
 
     // Price identifier to use when requesting claims through Optimistic Oracle.
-    bytes32 constant priceIdentifier = "YES_OR_NO_QUERY";
+    bytes32 public constant priceIdentifier = "YES_OR_NO_QUERY";
 
     // Template for constructing ancillary data. The claim would insert insuredEvent in between when requesting
     // through Optimistic Oracle.
@@ -57,7 +57,7 @@ contract InsuranceArbitrator {
     // Finder for UMA contracts.
     FinderInterface public finder;
 
-    uint256 constant MAX_EVENT_DESCRIPTION_SIZE = 300; // Insured event description should be concise.
+    uint256 public constant MAX_EVENT_DESCRIPTION_SIZE = 300; // Insured event description should be concise.
 
     /****************************************
      *                EVENTS                *
