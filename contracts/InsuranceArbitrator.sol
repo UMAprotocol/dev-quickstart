@@ -94,7 +94,9 @@ contract InsuranceArbitrator {
      * @notice Construct the InsuranceArbitrator
      * @param _finderAddress DVM finder to find other UMA ecosystem contracts.
      */
-    constructor(address _finderAddress) {}
+    constructor(address _finderAddress) {
+        finder = FinderInterface(_finderAddress);
+    }
 
     /******************************************
      *          INSURANCE FUNCTIONS           *
