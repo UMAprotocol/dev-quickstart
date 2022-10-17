@@ -47,7 +47,7 @@ contract InsuranceArbitrator {
     mapping(bytes32 => Claim) public insuranceClaims;
 
     // Oracle proposal bond set to 0.1% of claimed insurance coverage.
-    uint256 constant oracleBondPercentage = 1e15;
+    uint256 constant oracleBondPercentage = 10e15;
 
     // Optimistic oracle liveness set to 24h.
     uint256 constant optimisticOracleLivenessTime = 3600 * 24;
@@ -193,33 +193,7 @@ contract InsuranceArbitrator {
         uint256 timestamp,
         bytes memory ancillaryData,
         int256 price
-    ) external {
-        bytes32 claimId = _getClaimId(timestamp, ancillaryData);
-        require(address(insuranceClaims[claimId].optimisticOracle) == msg.sender, "Unauthorized callback");
-
-        // Claim can be settled only once, thus should be deleted.
-        bytes32 policyId = insuranceClaims[claimId].policyId;
-        InsurancePolicy storage claimedPolicy = insurancePolicies[policyId];
-        string memory insuredEvent = claimedPolicy.insuredEvent;
-        delete insuranceClaims[claimId];
-
-        address insuredAddress = claimedPolicy.insuredAddress;
-        IERC20 currency = claimedPolicy.currency;
-        uint256 insuredAmount = claimedPolicy.insuredAmount;
-
-        // Deletes insurance policy and transfers claim amount if the claim was confirmed.
-        if (price == 1e18) {
-            delete insurancePolicies[policyId];
-            currency.safeTransferFrom(address(this), insuredAddress, insuredAmount);
-
-            emit ClaimAccepted(timestamp, policyId, insuredEvent, insuredAddress, currency, insuredAmount);
-            // Otherwise just reset the flag so that repeated claims can be made.
-        } else {
-            claimedPolicy.claimInitiated = false;
-
-            emit ClaimRejected(timestamp, policyId, insuredEvent, insuredAddress, currency, insuredAmount);
-        }
-    }
+    ) external {}
 
     /******************************************
      *           INTERNAL FUNCTIONS           *
