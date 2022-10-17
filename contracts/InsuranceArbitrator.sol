@@ -170,7 +170,7 @@ contract InsuranceArbitrator {
         // Deletes insurance policy and transfers claim amount if the claim was confirmed.
         if (price == 1e18) {
             delete insurancePolicies[policyId];
-            currency.safeTransferFrom(address(this), insuredAddress, insuredAmount);
+            currency.safeTransfer(insuredAddress, insuredAmount);
 
             emit ClaimAccepted(timestamp, policyId, insuredEvent, insuredAddress, currency, insuredAmount);
             // Otherwise just reset the flag so that repeated claims can be made.
