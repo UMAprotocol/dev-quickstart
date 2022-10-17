@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
 import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
+import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
 
 /**
  * @title Insurance Arbitrator Contract
@@ -13,6 +17,8 @@ import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
  * active ready for the subsequent claim attempts.
  */
 contract InsuranceArbitrator {
+    using SafeERC20 for IERC20;
+
     /******************************************
      *  STATE VARIABLES AND DATA STRUCTURES   *
      ******************************************/
@@ -22,16 +28,22 @@ contract InsuranceArbitrator {
         bool claimInitiated; // Claim state preventing simultaneous claim attempts.
         string insuredEvent; // Short description of insured event.
         address insuredAddress; // Beneficiary address eligible for insurance compensation.
-        address currency; // Denomination token for insurance coverage.
+        IERC20 currency; // Denomination token for insurance coverage.
         uint256 insuredAmount; // Amount of insurance coverage.
+    }
+
+    // Tracks raised claims on insurance policies.
+    struct Claim {
+        bytes32 policyId; // Claimed policy identifier.
+        OptimisticOracleV2Interface optimisticOracle; // optimistic oracle instance where claims are resolved.
     }
 
     // References all active insurance policies by policyId.
     mapping(bytes32 => InsurancePolicy) insurancePolicies;
 
-    // Maps hash of initiated claims to their policyId.
+    // Maps hash of initiated claims to their policyId and optimistic oracle implementation.
     // This is used in callback function to potentially pay out the beneficiary.
-    mapping(bytes32 => bytes32) insuranceClaims;
+    mapping(bytes32 => Claim) public insuranceClaims;
 
     // Oracle proposal bond set to 0.1% of claimed insurance coverage.
     uint256 constant oracleBondPercentage = 10e15;
@@ -59,34 +71,31 @@ contract InsuranceArbitrator {
         address indexed insurer,
         string insuredEvent,
         address indexed insuredAddress,
-        address currency,
+        IERC20 currency,
         uint256 insuredAmount
     );
     event ClaimSubmitted(
         uint256 claimTimestamp,
         bytes32 indexed policyId,
-        address indexed insurer,
         string insuredEvent,
         address indexed insuredAddress,
-        address currency,
+        IERC20 currency,
         uint256 insuredAmount
     );
     event ClaimAccepted(
         uint256 claimTimestamp,
         bytes32 indexed policyId,
-        address indexed insurer,
         string insuredEvent,
         address indexed insuredAddress,
-        address currency,
+        IERC20 currency,
         uint256 insuredAmount
     );
     event ClaimRejected(
         uint256 claimTimestamp,
         bytes32 indexed policyId,
-        address indexed insurer,
         string insuredEvent,
         address indexed insuredAddress,
-        address currency,
+        IERC20 currency,
         uint256 insuredAmount
     );
 
@@ -144,5 +153,39 @@ contract InsuranceArbitrator {
         uint256 timestamp,
         bytes memory ancillaryData,
         int256 price
-    ) external {}
+    ) external {
+        bytes32 claimId = _getClaimId(timestamp, ancillaryData);
+        require(address(insuranceClaims[claimId].optimisticOracle) == msg.sender, "Unauthorized callback");
+
+        // Claim can be settled only once, thus should be deleted.
+        bytes32 policyId = insuranceClaims[claimId].policyId;
+        InsurancePolicy storage claimedPolicy = insurancePolicies[policyId];
+        string memory insuredEvent = claimedPolicy.insuredEvent;
+        delete insuranceClaims[claimId];
+
+        address insuredAddress = claimedPolicy.insuredAddress;
+        IERC20 currency = claimedPolicy.currency;
+        uint256 insuredAmount = claimedPolicy.insuredAmount;
+
+        // Deletes insurance policy and transfers claim amount if the claim was confirmed.
+        if (price == 1e18) {
+            delete insurancePolicies[policyId];
+            currency.safeTransferFrom(address(this), insuredAddress, insuredAmount);
+
+            emit ClaimAccepted(timestamp, policyId, insuredEvent, insuredAddress, currency, insuredAmount);
+            // Otherwise just reset the flag so that repeated claims can be made.
+        } else {
+            claimedPolicy.claimInitiated = false;
+
+            emit ClaimRejected(timestamp, policyId, insuredEvent, insuredAddress, currency, insuredAmount);
+        }
+    }
+
+    /******************************************
+     *           INTERNAL FUNCTIONS           *
+     ******************************************/
+
+    function _getClaimId(uint256 timestamp, bytes memory ancillaryData) internal pure returns (bytes32) {
+        return keccak256(abi.encode(timestamp, ancillaryData));
+    }
 }
