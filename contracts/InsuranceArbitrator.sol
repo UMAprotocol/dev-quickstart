@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
 import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
+import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
 
 /**
  * @title Insurance Arbitrator Contract
@@ -33,15 +34,21 @@ contract InsuranceArbitrator {
         uint256 insuredAmount; // Amount of insurance coverage.
     }
 
+    // Tracks raised claims on insurance policies.
+    struct Claim {
+        bytes32 policyId; // Claimed policy identifier.
+        OptimisticOracleV2Interface optimisticOracle; // optimistic oracle instance where claims are resolved.
+    }
+
     // References all active insurance policies by policyId.
     mapping(bytes32 => InsurancePolicy) public insurancePolicies;
 
-    // Maps hash of initiated claims to their policyId.
+    // Maps hash of initiated claims to their policyId and optimistic oracle implementation.
     // This is used in callback function to potentially pay out the beneficiary.
-    mapping(bytes32 => bytes32) public insuranceClaims;
+    mapping(bytes32 => Claim) public insuranceClaims;
 
     // Oracle proposal bond set to 0.1% of claimed insurance coverage.
-    uint256 public constant oracleBondPercentage = 10e15;
+    uint256 public constant oracleBondPercentage = 1e15;
 
     // Optimistic oracle liveness set to 24h.
     uint256 public constant optimisticOracleLivenessTime = 3600 * 24;
@@ -74,7 +81,6 @@ contract InsuranceArbitrator {
     event ClaimSubmitted(
         uint256 claimTimestamp,
         bytes32 indexed policyId,
-        address indexed insurer,
         string insuredEvent,
         address indexed insuredAddress,
         IERC20 currency,
@@ -83,7 +89,6 @@ contract InsuranceArbitrator {
     event ClaimAccepted(
         uint256 claimTimestamp,
         bytes32 indexed policyId,
-        address indexed insurer,
         string insuredEvent,
         address indexed insuredAddress,
         IERC20 currency,
@@ -92,7 +97,6 @@ contract InsuranceArbitrator {
     event ClaimRejected(
         uint256 claimTimestamp,
         bytes32 indexed policyId,
-        address indexed insurer,
         string insuredEvent,
         address indexed insuredAddress,
         IERC20 currency,
@@ -152,7 +156,46 @@ contract InsuranceArbitrator {
      * currency token. This call requests and proposes that insuredEvent had ocured through Optimistic Oracle.
      * @param policyId Identifier of claimed insurance policy.
      */
-    function submitClaim(bytes32 policyId) external {}
+    function submitClaim(bytes32 policyId) external {
+        InsurancePolicy storage claimedPolicy = insurancePolicies[policyId];
+        require(claimedPolicy.insuredAddress != address(0), "Insurance not issued");
+        require(!claimedPolicy.claimInitiated, "Claim already initiated");
+
+        claimedPolicy.claimInitiated = true;
+        uint256 timestamp = block.timestamp;
+        string memory insuredEvent = claimedPolicy.insuredEvent;
+        bytes memory ancillaryData = abi.encodePacked(ancillaryDataHead, insuredEvent, ancillaryDataTail);
+        bytes32 claimId = _getClaimId(timestamp, ancillaryData);
+        Claim storage newClaim = insuranceClaims[claimId];
+        newClaim.policyId = policyId;
+        OptimisticOracleV2Interface optimisticOracle = _getOptimisticOracle();
+        newClaim.optimisticOracle = optimisticOracle;
+
+        // Initiate price request at Optimistic Oracle.
+        IERC20 currency = claimedPolicy.currency;
+        optimisticOracle.requestPrice(priceIdentifier, timestamp, ancillaryData, currency, 0);
+
+        // Configure price request parameters.
+        uint256 insuredAmount = claimedPolicy.insuredAmount;
+        uint256 proposerBond = (insuredAmount * oracleBondPercentage) / 1e18;
+        uint256 totalBond = optimisticOracle.setBond(priceIdentifier, timestamp, ancillaryData, proposerBond);
+        optimisticOracle.setCustomLiveness(priceIdentifier, timestamp, ancillaryData, optimisticOracleLivenessTime);
+        optimisticOracle.setCallbacks(priceIdentifier, timestamp, ancillaryData, false, false, true);
+
+        // Propose canonical value representing "True"; i.e. the insurance claim is valid.
+        currency.safeTransferFrom(msg.sender, address(this), totalBond);
+        currency.safeApprove(address(optimisticOracle), totalBond);
+        optimisticOracle.proposePriceFor(
+            msg.sender,
+            address(this),
+            priceIdentifier,
+            timestamp,
+            ancillaryData,
+            int256(1e18)
+        );
+
+        emit ClaimSubmitted(timestamp, policyId, insuredEvent, claimedPolicy.insuredAddress, currency, insuredAmount);
+    }
 
     /******************************************
      *           CALLBACK FUNCTIONS           *
@@ -190,5 +233,13 @@ contract InsuranceArbitrator {
         uint256 insuredAmount
     ) internal pure returns (bytes32) {
         return keccak256(abi.encode(blockNumber, insuredEvent, insuredAddress, currency, insuredAmount));
+    }
+
+    function _getClaimId(uint256 timestamp, bytes memory ancillaryData) internal pure returns (bytes32) {
+        return keccak256(abi.encode(timestamp, ancillaryData));
+    }
+
+    function _getOptimisticOracle() internal view returns (OptimisticOracleV2Interface) {
+        return OptimisticOracleV2Interface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracleV2));
     }
 }
