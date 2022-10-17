@@ -47,7 +47,7 @@ contract InsuranceArbitrator {
     mapping(bytes32 => Claim) public insuranceClaims;
 
     // Oracle proposal bond set to 0.1% of claimed insurance coverage.
-    uint256 constant oracleBondPercentage = 10e15;
+    uint256 constant oracleBondPercentage = 1e15;
 
     // Optimistic oracle liveness set to 24h.
     uint256 constant optimisticOracleLivenessTime = 3600 * 24;
