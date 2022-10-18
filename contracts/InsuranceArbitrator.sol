@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
+import "@uma/core/contracts/common/implementation/Testable.sol";
 import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
 import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
 
@@ -18,7 +19,7 @@ import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
  * automatically pays out insurance coverage to the insured beneficiary. If the claim is rejected policy continues to be
  * active ready for the subsequent claim attempts.
  */
-contract InsuranceArbitrator {
+contract InsuranceArbitrator is Testable {
     using SafeERC20 for IERC20;
 
     /******************************************
@@ -107,7 +108,7 @@ contract InsuranceArbitrator {
      * @notice Construct the InsuranceArbitrator
      * @param _finderAddress DVM finder to find other UMA ecosystem contracts.
      */
-    constructor(address _finderAddress) {
+    constructor(address _finderAddress, address _timerAddress) Testable(_timerAddress) {
         finder = FinderInterface(_finderAddress);
     }
 
@@ -162,7 +163,7 @@ contract InsuranceArbitrator {
         require(!claimedPolicy.claimInitiated, "Claim already initiated");
 
         claimedPolicy.claimInitiated = true;
-        uint256 timestamp = block.timestamp;
+        uint256 timestamp = getCurrentTime();
         string memory insuredEvent = claimedPolicy.insuredEvent;
         bytes memory ancillaryData = abi.encodePacked(ancillaryDataHead, insuredEvent, ancillaryDataTail);
         bytes32 claimId = _getClaimId(timestamp, ancillaryData);
