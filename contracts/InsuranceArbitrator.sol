@@ -37,7 +37,7 @@ contract InsuranceArbitrator {
     // Tracks raised claims on insurance policies.
     struct Claim {
         bytes32 policyId; // Claimed policy identifier.
-        OptimisticOracleV2Interface optimisticOracle; // optimistic oracle instance where claims are resolved.
+        OptimisticOracleV2Interface oo; // optimistic oracle instance where claims are resolved.
     }
 
     // References all active insurance policies by policyId.
@@ -168,31 +168,24 @@ contract InsuranceArbitrator {
         bytes32 claimId = _getClaimId(timestamp, ancillaryData);
         Claim storage newClaim = insuranceClaims[claimId];
         newClaim.policyId = policyId;
-        OptimisticOracleV2Interface optimisticOracle = _getOptimisticOracle();
-        newClaim.optimisticOracle = optimisticOracle;
+        OptimisticOracleV2Interface oo = _getOptimisticOracle();
+        newClaim.oo = oo;
 
         // Initiate price request at Optimistic Oracle.
         IERC20 currency = claimedPolicy.currency;
-        optimisticOracle.requestPrice(priceIdentifier, timestamp, ancillaryData, currency, 0);
+        oo.requestPrice(priceIdentifier, timestamp, ancillaryData, currency, 0);
 
         // Configure price request parameters.
         uint256 insuredAmount = claimedPolicy.insuredAmount;
         uint256 proposerBond = (insuredAmount * oracleBondPercentage) / 1e18;
-        uint256 totalBond = optimisticOracle.setBond(priceIdentifier, timestamp, ancillaryData, proposerBond);
-        optimisticOracle.setCustomLiveness(priceIdentifier, timestamp, ancillaryData, optimisticOracleLivenessTime);
-        optimisticOracle.setCallbacks(priceIdentifier, timestamp, ancillaryData, false, false, true);
+        uint256 totalBond = oo.setBond(priceIdentifier, timestamp, ancillaryData, proposerBond);
+        oo.setCustomLiveness(priceIdentifier, timestamp, ancillaryData, optimisticOracleLivenessTime);
+        oo.setCallbacks(priceIdentifier, timestamp, ancillaryData, false, false, true);
 
         // Propose canonical value representing "True"; i.e. the insurance claim is valid.
         currency.safeTransferFrom(msg.sender, address(this), totalBond);
-        currency.safeApprove(address(optimisticOracle), totalBond);
-        optimisticOracle.proposePriceFor(
-            msg.sender,
-            address(this),
-            priceIdentifier,
-            timestamp,
-            ancillaryData,
-            int256(1e18)
-        );
+        currency.safeApprove(address(oo), totalBond);
+        oo.proposePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData, int256(1e18));
 
         emit ClaimSubmitted(timestamp, policyId, insuredEvent, claimedPolicy.insuredAddress, currency, insuredAmount);
     }
@@ -217,7 +210,7 @@ contract InsuranceArbitrator {
         int256 price
     ) external {
         bytes32 claimId = _getClaimId(timestamp, ancillaryData);
-        require(address(insuranceClaims[claimId].optimisticOracle) == msg.sender, "Unauthorized callback");
+        require(address(insuranceClaims[claimId].oo) == msg.sender, "Unauthorized callback");
 
         // Claim can be settled only once, thus should be deleted.
         bytes32 policyId = insuranceClaims[claimId].policyId;
