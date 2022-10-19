@@ -17,6 +17,9 @@ import "@uma/core/contracts/oracle/implementation/Constants.sol";
  * methods of the OptimisticOracle to confirm or deny the response to a question. To ratify an assertion,
  * an initial assertion must be made and disputed, such that the question is scaled to the DVM, where UMA token
  * holders vote on it.
+ * @dev This contract is stateless and solely encapsulates the DVM's functionality to leverage the Optimistic Arbitrator pattern.
+ * @dev The Optimistic Oracle's functions are called on behalf of the caller, hence this contract will neither hold nor receive funds
+ *  from these actions.
  */
 contract OptimisticArbitrator {
     using SafeERC20 for IERC20;
@@ -42,6 +45,8 @@ contract OptimisticArbitrator {
 
     /**
      * @notice Makes an assertion to the Optimistic Oracle.
+     * @dev The Optimistic Oracle price proposal is submitted on behalf of the caller, therefore only the caller,
+     *  and not the Optimist Arbitrator, will hold or receive funds.
      * @param timestamp timestamp of the price being requested.
      * @param ancillaryData ancillary data representing additional args being passed with the price request.
      * @param proposedPrice price being proposed.
@@ -68,6 +73,8 @@ contract OptimisticArbitrator {
      * @notice Ratifies an existing assertion to the DVM by disputing the proposed answer to the question.
      * @dev The proposer and disputer are the same address so the final cost of rafiying an assertion in collateral
      *  token is equal to the final fee + bond / 2.
+     * @dev The Optimistic Oracle price dispute is submitted on behalf of the caller, therefore only the caller,
+     *  and not the Optimist Arbitrator, will hold or receive funds.
      * @param timestamp timestamp of the price being requested.
      * @param ancillaryData ancillary data representing additional args being passed with the price request.
      */
@@ -89,6 +96,8 @@ contract OptimisticArbitrator {
      * @notice Assert and ratifies a question to the DVM.
      * @dev The proposer and disputer are the same address so the final cost of asserting and ratifying in collateral token
      *  is equal to the final fee as we set the bond to 0.
+     * @dev The Optimistic Oracle price proposal and dispute are submitted on behalf of the caller, therefore only the caller,
+     *  and not the Optimist Arbitrator, will hold or receive funds.
      * @param timestamp timestamp of the price being requested.
      * @param ancillaryData ancillary data representing additional args being passed with the price request.
      */
