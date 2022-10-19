@@ -56,16 +56,12 @@ contract OptimisticArbitrator {
     function assertAndRatify(
         uint256 timestamp,
         bytes memory ancillaryData,
-        int256 proposedPrice,
-        uint256 reward,
-        uint256 bond,
-        uint64 liveness
+        int256 proposedPrice
     ) public {
         OptimisticOracleV2Interface oo = _getOptimisticOracle();
-        uint256 totalAmount = reward + 2 * (bond + _getStore().computeFinalFee(address(currency)).rawValue);
+        uint256 totalAmount = 2 * _getStore().computeFinalFee(address(currency)).rawValue;
         _pullAndApprove(address(oo), totalAmount);
-
-        _makeAssertion(timestamp, ancillaryData, proposedPrice, reward, bond, liveness, oo);
+        _makeAssertion(timestamp, ancillaryData, proposedPrice, 0, 0, 0, oo);
         oo.disputePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData);
     }
 
@@ -89,7 +85,7 @@ contract OptimisticArbitrator {
     ) private {
         oo.requestPrice(priceIdentifier, timestamp, ancillaryData, currency, reward);
         oo.setBond(priceIdentifier, timestamp, ancillaryData, bond);
-        oo.setCustomLiveness(priceIdentifier, timestamp, ancillaryData, liveness);
+        if (liveness > 0) oo.setCustomLiveness(priceIdentifier, timestamp, ancillaryData, liveness);
         oo.proposePriceFor(
             address(msg.sender),
             address(this),

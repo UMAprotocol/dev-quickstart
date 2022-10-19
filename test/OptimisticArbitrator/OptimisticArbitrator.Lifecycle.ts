@@ -117,21 +117,13 @@ describe("OptimisticArbitrator: Lifecycle", function () {
   it("Assert and ratify", async function () {
     const requestTimestamp = await optimisticArbitrator.getCurrentTime();
     await optimisticOracle.setCurrentTime(requestTimestamp);
-
-    const liveness = 3600; // 1 hour
+    const balanceBefore = await usdc.balanceOf(deployer.address);
 
     const ancillaryData = ethers.utils.toUtf8Bytes(
       `q: title: Will the price of BTC be $18000.00 or more on October 10, 2022?, description: More info. res_data: p1: 0, p2: 1, p3: 0.5, p4: -57896044618658097711785492504343953926634992332820282019728.792003956564819968. Where p1 corresponds to No, p2 to a Yes, p3 to unknown/tie, and p4 to an early request`
     );
 
-    await optimisticArbitrator.assertAndRatify(
-      requestTimestamp,
-      ancillaryData,
-      1,
-      ethers.utils.parseUnits("20", await usdc.decimals()),
-      ethers.utils.parseUnits("500", await usdc.decimals()),
-      liveness
-    );
+    await optimisticArbitrator.assertAndRatify(requestTimestamp, ancillaryData, 1);
 
     // In the meantime simulate a vote in the DVM in which the originally disputed price is accepted.
     const disputedPriceRequest = (await mockOracle.queryFilter(mockOracle.filters.PriceRequestAdded()))[0];
@@ -150,5 +142,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     );
 
     expect((await optimisticArbitrator.getTruth(requestTimestamp, ancillaryData)).toNumber()).to.equal(1);
+    const expectedCost = await await store.finalFees(usdc.address);
+    expect(await usdc.balanceOf(deployer.address)).to.equal(balanceBefore.sub(expectedCost));
   });
 });
