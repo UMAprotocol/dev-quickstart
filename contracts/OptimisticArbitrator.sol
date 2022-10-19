@@ -5,159 +5,107 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "@uma/core/contracts/oracle/interfaces/StoreInterface.sol";
-import "@uma/core/contracts/oracle/interfaces/OracleAncillaryInterface.sol";
 import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
-import "@uma/core/contracts/oracle/interfaces/IdentifierWhitelistInterface.sol";
 import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
 
-import "@uma/core/contracts/common/implementation/AncillaryData.sol";
-import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
-import "@uma/core/contracts/common/implementation/Testable.sol";
 
-contract OptimisticArbitrator is Testable {
+contract OptimisticArbitrator {
     using SafeERC20 for IERC20;
-
-    struct Request {
-        address proposer; // Address of the proposer.
-        address disputer; // Address of the disputer.
-        IERC20 currency; // ERC20 token used to pay rewards and fees.
-        bool settled; // True if the request is settled.
-        int256 proposedPrice; // Price that the proposer submitted.
-        uint256 reward; // Amount of the currency to pay to the proposer on settlement.
-        uint256 finalFee; // Final fee to pay to the Store upon request to the DVM.
-        uint256 bond; // Bond that the proposer and disputer must pay on top of the final fee.
-        uint64 customLiveness; // Custom liveness value set by the requester.
-        uint64 expirationTime; // Time at which the request auto-settles without a dispute.
-    }
 
     FinderInterface public finder;
 
+    IERC20 public currency; // collateral token used to bond requests and pay rewards.
+
     bytes32 public priceIdentifier = "YES_OR_NO_QUERY";
 
-    uint256 public constant OO_ANCILLARY_DATA_LIMIT = 8139; // 8192 - 53
-
-    constructor(address _finderAddress, address _timerAddress) Testable(_timerAddress) {
+    constructor(address _finderAddress, address _currency) {
         finder = FinderInterface(_finderAddress);
+        currency = IERC20(_currency);
     }
 
-    mapping(bytes32 => Request) public requests;
-
-    function requestPrice(
+    function makeAssertion(
         uint256 timestamp,
         bytes memory ancillaryData,
-        IERC20 currency,
+        int256 proposedPrice,
         uint256 reward,
         uint256 bond,
-        uint64 customLiveness
+        uint64 liveness
     ) public {
-        bytes32 requestId = _getId(msg.sender, priceIdentifier, timestamp, ancillaryData);
-        if (requests[requestId].proposer != address(0)) return; // If the address is already initialized return early.
-        require(_getIdentifierWhitelist().isIdentifierSupported(priceIdentifier), "Unsupported identifier");
-        require(_getCollateralWhitelist().isOnWhitelist(address(currency)), "Unsupported currency");
-        require(timestamp <= getCurrentTime(), "Timestamp in future");
-        require(ancillaryData.length <= OO_ANCILLARY_DATA_LIMIT, "Ancillary Data too long");
-
-        requests[requestId] = Request({
-            proposer: address(0),
-            disputer: address(0),
-            currency: currency,
-            settled: false,
-            proposedPrice: 0,
-            reward: reward,
-            finalFee: _getStore().computeFinalFee(address(currency)).rawValue,
-            bond: bond,
-            customLiveness: customLiveness,
-            expirationTime: 0
-        });
-
-        if (reward > 0) currency.safeTransferFrom(msg.sender, address(this), reward);
-    }
-
-    function proposePrice(
-        uint256 timestamp,
-        bytes memory ancillaryData,
-        int256 proposedPrice
-    ) public {
-        Request storage request = requests[_getId(msg.sender, priceIdentifier, timestamp, ancillaryData)];
-        require(address(request.currency) != address(0), "Price not requested");
-        require(request.proposer == address(0), "Current proposal in liveness");
-
-        request.proposer = msg.sender;
-        request.proposedPrice = proposedPrice;
-        request.expirationTime = uint64(getCurrentTime()) + request.customLiveness;
-
-        request.currency.safeTransferFrom(msg.sender, address(this), request.bond + request.finalFee);
-    }
-
-    function disputePrice(uint256 timestamp, bytes memory ancillaryData) public {
-        Request storage request = requests[_getId(msg.sender, priceIdentifier, timestamp, ancillaryData)];
-        require(request.proposer != address(0), "No proposed price to dispute");
-        require(request.disputer == address(0), "Proposal already disputed");
-        require(uint64(getCurrentTime()) < request.expirationTime, "Proposal past liveness");
-
-        request.disputer = msg.sender;
-
-        request.currency.safeTransferFrom(msg.sender, address(this), request.bond + request.finalFee);
-
         OptimisticOracleV2Interface oo = _getOptimisticOracle();
 
-        request.currency.approve(address(oo), 2 * (request.bond + request.finalFee) + request.reward);
+        uint256 totalAmount = reward + bond + _getStore().computeFinalFee(address(currency)).rawValue;
+        _pullAndApprove(address(oo), totalAmount);
 
-        oo.requestPrice(priceIdentifier, timestamp, ancillaryData, request.currency, request.reward);
-        oo.setBond(priceIdentifier, timestamp, ancillaryData, request.bond);
+        _makeAssertion(timestamp, ancillaryData, proposedPrice, reward, bond, liveness, oo);
+    }
+
+    function ratifyAssertion(
+        uint256 timestamp,
+        bytes memory ancillaryData,
+        uint256 reward,
+        uint256 bond
+    ) public {
+        OptimisticOracleV2Interface oo = _getOptimisticOracle();
+        uint256 totalAmount = reward + bond + _getStore().computeFinalFee(address(currency)).rawValue;
+        _pullAndApprove(address(oo), totalAmount);
+        oo.disputePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData);
+    }
+
+    function assertAndRatify(
+        uint256 timestamp,
+        bytes memory ancillaryData,
+        int256 proposedPrice,
+        uint256 reward,
+        uint256 bond,
+        uint64 liveness
+    ) public {
+        OptimisticOracleV2Interface oo = _getOptimisticOracle();
+        uint256 totalAmount = reward + 2 * (bond + _getStore().computeFinalFee(address(currency)).rawValue);
+        _pullAndApprove(address(oo), totalAmount);
+
+        _makeAssertion(timestamp, ancillaryData, proposedPrice, reward, bond, liveness, oo);
+        oo.disputePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData);
+    }
+
+    function getTruth(uint256 timestamp, bytes memory ancillaryData) public view returns (int256) {
+        OptimisticOracleV2Interface oo = _getOptimisticOracle();
+        return oo.getRequest(address(this), priceIdentifier, timestamp, ancillaryData).resolvedPrice;
+    }
+
+    function getCurrentTime() public view returns (uint256) {
+        return block.timestamp;
+    }
+
+    function _makeAssertion(
+        uint256 timestamp,
+        bytes memory ancillaryData,
+        int256 proposedPrice,
+        uint256 reward,
+        uint256 bond,
+        uint64 liveness,
+        OptimisticOracleV2Interface oo
+    ) private {
+        oo.requestPrice(priceIdentifier, timestamp, ancillaryData, currency, reward);
+        oo.setBond(priceIdentifier, timestamp, ancillaryData, bond);
+        oo.setCustomLiveness(priceIdentifier, timestamp, ancillaryData, liveness);
         oo.proposePriceFor(
-            request.proposer,
+            address(msg.sender),
             address(this),
             priceIdentifier,
             timestamp,
             ancillaryData,
-            request.proposedPrice
+            proposedPrice
         );
-        oo.disputePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData);
-
-        delete requests[_getId(msg.sender, priceIdentifier, timestamp, ancillaryData)];
     }
 
-    function settleAndGetPrice(uint256 timestamp, bytes memory ancillaryData) public returns (int256) {
-        Request storage request = requests[_getId(msg.sender, priceIdentifier, timestamp, ancillaryData)];
-        require(address(request.currency) != address(0), "Price not requested");
-        require(request.proposer != address(0), "No proposed price to settle");
-        require(uint64(getCurrentTime()) > request.expirationTime, "Proposal not passed liveness");
-        require(request.disputer == address(0), "Proposal disputed, cant settle");
-
-        request.settled = true;
-
-        request.currency.safeTransfer(request.proposer, request.bond + request.finalFee + request.reward);
-
-        return request.proposedPrice;
-    }
-
-    function getPrice(uint256 timestamp, bytes memory ancillaryData) public view returns (int256) {
-        Request storage request = requests[_getId(msg.sender, priceIdentifier, timestamp, ancillaryData)];
-        require(request.settled == true, "Request not settled");
-        return request.proposedPrice;
-    }
-
-    function _getId(
-        address requester,
-        bytes32 identifier,
-        uint256 timestamp,
-        bytes memory ancillaryData
-    ) private pure returns (bytes32) {
-        return keccak256(abi.encodePacked(requester, identifier, timestamp, ancillaryData));
-    }
-
-    function _getCollateralWhitelist() internal view returns (AddressWhitelist) {
-        return AddressWhitelist(finder.getImplementationAddress(OracleInterfaces.CollateralWhitelist));
+    function _pullAndApprove(address recipient, uint256 amount) private {
+        currency.safeTransferFrom(msg.sender, address(this), amount);
+        currency.approve(address(recipient), amount);
     }
 
     function _getStore() internal view returns (StoreInterface) {
         return StoreInterface(finder.getImplementationAddress(OracleInterfaces.Store));
-    }
-
-    function _getIdentifierWhitelist() internal view returns (IdentifierWhitelistInterface) {
-        return IdentifierWhitelistInterface(finder.getImplementationAddress(OracleInterfaces.IdentifierWhitelist));
     }
 
     function _getOptimisticOracle() internal view returns (OptimisticOracleV2Interface) {
