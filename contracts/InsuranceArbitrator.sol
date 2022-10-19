@@ -30,7 +30,6 @@ contract InsuranceArbitrator {
         bool claimInitiated; // Claim state preventing simultaneous claim attempts.
         string insuredEvent; // Short description of insured event.
         address insuredAddress; // Beneficiary address eligible for insurance compensation.
-        IERC20 currency; // Denomination token for insurance coverage.
         uint256 insuredAmount; // Amount of insurance coverage.
     }
 
@@ -61,6 +60,9 @@ contract InsuranceArbitrator {
     // Optimistic Oracle instance where claims are resolved.
     OptimisticOracleV2Interface public immutable oo;
 
+    // Denomination token for insurance coverage and bonding.
+    IERC20 public immutable currency;
+
     uint256 public constant MAX_EVENT_DESCRIPTION_SIZE = 300; // Insured event description should be concise.
 
     /****************************************
@@ -72,7 +74,6 @@ contract InsuranceArbitrator {
         address indexed insurer,
         string insuredEvent,
         address indexed insuredAddress,
-        IERC20 currency,
         uint256 insuredAmount
     );
     event ClaimSubmitted(
@@ -80,7 +81,6 @@ contract InsuranceArbitrator {
         bytes32 indexed policyId,
         string insuredEvent,
         address indexed insuredAddress,
-        IERC20 currency,
         uint256 insuredAmount
     );
     event ClaimAccepted(
@@ -88,7 +88,6 @@ contract InsuranceArbitrator {
         bytes32 indexed policyId,
         string insuredEvent,
         address indexed insuredAddress,
-        IERC20 currency,
         uint256 insuredAmount
     );
     event ClaimRejected(
@@ -96,16 +95,17 @@ contract InsuranceArbitrator {
         bytes32 indexed policyId,
         string insuredEvent,
         address indexed insuredAddress,
-        IERC20 currency,
         uint256 insuredAmount
     );
 
     /**
      * @notice Construct the InsuranceArbitrator
      * @param _finderAddress DVM finder to find other UMA ecosystem contracts.
+     * @param _currency denomination token for insurance coverage and bonding.
      */
-    constructor(address _finderAddress) {
+    constructor(address _finderAddress, address _currency) {
         finder = FinderInterface(_finderAddress);
+        currency = IERC20(_currency);
         oo = OptimisticOracleV2Interface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracleV2));
     }
 
@@ -119,32 +119,28 @@ contract InsuranceArbitrator {
      * @param insuredEvent short description of insured event. Potential verifiers should be able to evaluate whether
      * this event had occurred as of claim time with binary yes/no answer.
      * @param insuredAddress Beneficiary address eligible for insurance compensation.
-     * @param currency Denomination token for insurance coverage.
      * @param insuredAmount Amount of insurance coverage.
      * @return policyId Unique identifier of issued insurance policy.
      */
     function issueInsurance(
         string calldata insuredEvent,
         address insuredAddress,
-        IERC20 currency,
         uint256 insuredAmount
     ) external returns (bytes32 policyId) {
         require(bytes(insuredEvent).length <= MAX_EVENT_DESCRIPTION_SIZE, "Event description too long");
         require(insuredAddress != address(0), "Invalid insured address");
-        require(_getCollateralWhitelist().isOnWhitelist(address(currency)), "Unsupported currency");
         require(insuredAmount > 0, "Amount should be above 0");
-        policyId = _getPolicyId(block.number, insuredEvent, insuredAddress, currency, insuredAmount);
+        policyId = _getPolicyId(block.number, insuredEvent, insuredAddress, insuredAmount);
         require(insurancePolicies[policyId].insuredAddress == address(0), "Policy already issued");
 
         InsurancePolicy storage newPolicy = insurancePolicies[policyId];
         newPolicy.insuredEvent = insuredEvent;
         newPolicy.insuredAddress = insuredAddress;
-        newPolicy.currency = currency;
         newPolicy.insuredAmount = insuredAmount;
 
         currency.safeTransferFrom(msg.sender, address(this), insuredAmount);
 
-        emit PolicyIssued(policyId, msg.sender, insuredEvent, insuredAddress, currency, insuredAmount);
+        emit PolicyIssued(policyId, msg.sender, insuredEvent, insuredAddress, insuredAmount);
     }
 
     /**
@@ -167,7 +163,6 @@ contract InsuranceArbitrator {
         insuranceClaims[claimId] = policyId;
 
         // Initiate price request at Optimistic Oracle.
-        IERC20 currency = claimedPolicy.currency;
         oo.requestPrice(priceIdentifier, timestamp, ancillaryData, currency, 0);
 
         // Configure price request parameters.
@@ -182,7 +177,7 @@ contract InsuranceArbitrator {
         currency.safeApprove(address(oo), totalBond);
         oo.proposePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData, int256(1e18));
 
-        emit ClaimSubmitted(timestamp, policyId, insuredEvent, claimedPolicy.insuredAddress, currency, insuredAmount);
+        emit ClaimSubmitted(timestamp, policyId, insuredEvent, claimedPolicy.insuredAddress, insuredAmount);
     }
 
     /******************************************
@@ -214,7 +209,6 @@ contract InsuranceArbitrator {
         delete insuranceClaims[claimId];
 
         address insuredAddress = claimedPolicy.insuredAddress;
-        IERC20 currency = claimedPolicy.currency;
         uint256 insuredAmount = claimedPolicy.insuredAmount;
 
         // Deletes insurance policy and transfers claim amount if the claim was confirmed.
@@ -222,12 +216,12 @@ contract InsuranceArbitrator {
             delete insurancePolicies[policyId];
             currency.safeTransfer(insuredAddress, insuredAmount);
 
-            emit ClaimAccepted(timestamp, policyId, insuredEvent, insuredAddress, currency, insuredAmount);
+            emit ClaimAccepted(timestamp, policyId, insuredEvent, insuredAddress, insuredAmount);
             // Otherwise just reset the flag so that repeated claims can be made.
         } else {
             claimedPolicy.claimInitiated = false;
 
-            emit ClaimRejected(timestamp, policyId, insuredEvent, insuredAddress, currency, insuredAmount);
+            emit ClaimRejected(timestamp, policyId, insuredEvent, insuredAddress, insuredAmount);
         }
     }
 
@@ -235,18 +229,13 @@ contract InsuranceArbitrator {
      *           INTERNAL FUNCTIONS           *
      ******************************************/
 
-    function _getCollateralWhitelist() internal view returns (AddressWhitelist) {
-        return AddressWhitelist(finder.getImplementationAddress(OracleInterfaces.CollateralWhitelist));
-    }
-
     function _getPolicyId(
         uint256 blockNumber,
         string memory insuredEvent,
         address insuredAddress,
-        IERC20 currency,
         uint256 insuredAmount
     ) internal pure returns (bytes32) {
-        return keccak256(abi.encode(blockNumber, insuredEvent, insuredAddress, currency, insuredAmount));
+        return keccak256(abi.encode(blockNumber, insuredEvent, insuredAddress, insuredAmount));
     }
 
     function _getClaimId(uint256 timestamp, bytes memory ancillaryData) internal pure returns (bytes32) {
