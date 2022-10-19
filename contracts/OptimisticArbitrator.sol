@@ -40,14 +40,17 @@ contract OptimisticArbitrator {
         _makeAssertion(timestamp, ancillaryData, proposedPrice, reward, bond, liveness, oo);
     }
 
-    function ratifyAssertion(
-        uint256 timestamp,
-        bytes memory ancillaryData,
-        uint256 reward,
-        uint256 bond
-    ) public {
+    function ratifyAssertion(uint256 timestamp, bytes memory ancillaryData) public {
         OptimisticOracleV2Interface oo = _getOptimisticOracle();
-        uint256 totalAmount = reward + bond + _getStore().computeFinalFee(address(currency)).rawValue;
+        OptimisticOracleV2Interface.Request memory request = oo.getRequest(
+            address(this),
+            priceIdentifier,
+            timestamp,
+            ancillaryData
+        );
+        uint256 totalAmount = request.reward +
+            request.requestSettings.bond +
+            _getStore().computeFinalFee(address(currency)).rawValue;
         _pullAndApprove(address(oo), totalAmount);
         oo.disputePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData);
     }

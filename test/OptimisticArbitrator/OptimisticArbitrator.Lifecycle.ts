@@ -66,6 +66,46 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     expect((await optimisticArbitrator.getTruth(requestTimestamp, ancillaryData)).toNumber()).to.equal(1);
   });
 
+  it("Assert then ratify", async function () {
+    const requestTimestamp = await optimisticArbitrator.getCurrentTime();
+    await optimisticOracle.setCurrentTime(requestTimestamp);
+
+    const liveness = 3600; // 1 hour
+
+    const ancillaryData = ethers.utils.toUtf8Bytes(
+      `q: title: Will the price of BTC be $18000.00 or more on October 10, 2022?, description: More info. res_data: p1: 0, p2: 1, p3: 0.5, p4: -57896044618658097711785492504343953926634992332820282019728.792003956564819968. Where p1 corresponds to No, p2 to a Yes, p3 to unknown/tie, and p4 to an early request`
+    );
+
+    await optimisticArbitrator.makeAssertion(
+      requestTimestamp,
+      ancillaryData,
+      1,
+      ethers.utils.parseUnits("20", await usdc.decimals()),
+      ethers.utils.parseUnits("500", await usdc.decimals()),
+      liveness
+    );
+
+    await optimisticArbitrator.ratifyAssertion(requestTimestamp, ancillaryData);
+
+    // In the meantime simulate a vote in the DVM in which the originally disputed price is accepted.
+    const disputedPriceRequest = (await mockOracle.queryFilter(mockOracle.filters.PriceRequestAdded()))[0];
+    await mockOracle.pushPrice(
+      disputedPriceRequest.args.identifier,
+      disputedPriceRequest.args.time,
+      disputedPriceRequest.args.ancillaryData,
+      1
+    );
+
+    await optimisticOracle.settle(
+      optimisticArbitrator.address,
+      await optimisticArbitrator.priceIdentifier(),
+      requestTimestamp,
+      ancillaryData
+    );
+
+    expect((await optimisticArbitrator.getTruth(requestTimestamp, ancillaryData)).toNumber()).to.equal(1);
+  });
+
   it("Assert and ratify", async function () {
     const requestTimestamp = await optimisticArbitrator.getCurrentTime();
     await optimisticOracle.setCurrentTime(requestTimestamp);
@@ -76,7 +116,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
       `q: title: Will the price of BTC be $18000.00 or more on October 10, 2022?, description: More info. res_data: p1: 0, p2: 1, p3: 0.5, p4: -57896044618658097711785492504343953926634992332820282019728.792003956564819968. Where p1 corresponds to No, p2 to a Yes, p3 to unknown/tie, and p4 to an early request`
     );
 
-    const tx = await optimisticArbitrator.makeAssertion(
+    await optimisticArbitrator.assertAndRatify(
       requestTimestamp,
       ancillaryData,
       1,
@@ -85,68 +125,22 @@ describe("OptimisticArbitrator: Lifecycle", function () {
       liveness
     );
 
-    const receipt = await tx.wait();
+    // In the meantime simulate a vote in the DVM in which the originally disputed price is accepted.
+    const disputedPriceRequest = (await mockOracle.queryFilter(mockOracle.filters.PriceRequestAdded()))[0];
+    await mockOracle.pushPrice(
+      disputedPriceRequest.args.identifier,
+      disputedPriceRequest.args.time,
+      disputedPriceRequest.args.ancillaryData,
+      1
+    );
 
-    const block = await ethers.provider.getBlock(receipt.blockNumber);
+    await optimisticOracle.settle(
+      optimisticArbitrator.address,
+      await optimisticArbitrator.priceIdentifier(),
+      requestTimestamp,
+      ancillaryData
+    );
+
+    expect((await optimisticArbitrator.getTruth(requestTimestamp, ancillaryData)).toNumber()).to.equal(1);
   });
-
-  // it("Dispute with dvm arbitration", async function () {
-  //   const requestTimestamp = await optimisticArbitrator.getCurrentTime();
-  //   const liveness = 3600; // 1 hour
-
-  //   const ancillaryData = ethers.utils.toUtf8Bytes(
-  //     `q: title: Will the price of BTC be $18000.00 or more on October 10, 2022?, description: More info. res_data: p1: 0, p2: 1, p3: 0.5, p4: -57896044618658097711785492504343953926634992332820282019728.792003956564819968. Where p1 corresponds to No, p2 to a Yes, p3 to unknown/tie, and p4 to an early request`
-  //   );
-
-  //   const balanceBefore = await usdc.balanceOf(requester.address);
-
-  //   const bond = ethers.utils.parseUnits("0", await usdc.decimals());
-
-  //   await optimisticArbitrator.requestPrice(
-  //     requestTimestamp,
-  //     ancillaryData,
-  //     usdc.address,
-  //     ethers.utils.parseUnits("20", await usdc.decimals()),
-  //     bond,
-  //     liveness
-  //   );
-
-  //   // Proposer proposes a no anwser
-  //   await optimisticArbitrator.proposePrice(requestTimestamp, ancillaryData, 0);
-
-  //   // Disputer disputes the proposal
-  //   await optimisticArbitrator.disputePrice(requestTimestamp, ancillaryData);
-
-  //   // In the meantime simulate a vote in the DVM in which the originally disputed price is accepted.
-  //   const disputedPriceRequest = (await mockOracle.queryFilter(mockOracle.filters.PriceRequestAdded()))[0];
-  //   const tx = await mockOracle.pushPrice(
-  //     disputedPriceRequest.args.identifier,
-  //     disputedPriceRequest.args.time,
-  //     disputedPriceRequest.args.ancillaryData,
-  //     0
-  //   );
-  //   const receipt = await tx.wait();
-
-  //   // Set time after liveness
-  //   const block = await ethers.provider.getBlock(receipt.blockNumber);
-  //   await optimisticArbitrator.setCurrentTime(block.timestamp + (await optimisticOracle.defaultLiveness()).toNumber());
-
-  //   // Dispute is resolved by the DVM
-  //   await optimisticOracle.settle(
-  //     optimisticArbitrator.address,
-  //     await optimisticArbitrator.priceIdentifier(),
-  //     requestTimestamp,
-  //     ancillaryData
-  //   );
-
-  //   const storeFinalFee = await store.computeFinalFee(usdc.address);
-
-  //   const finalCost = storeFinalFee.rawValue.add(bond.div(2));
-
-  //   console.log(finalCost.toString());
-
-  //   expect(finalCost).to.equal(balanceBefore.sub(await usdc.balanceOf(requester.address)));
-
-  //   expect(finalCost).to.equal(await usdc.balanceOf(store.address));
-  // });
 });
