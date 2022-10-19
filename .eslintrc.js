@@ -5,6 +5,7 @@ module.exports = {
     mocha: true,
     node: true,
   },
+  "eslint.validate": ["javascript", "typescript"],
   plugins: ["@typescript-eslint"],
   extends: ["standard", "plugin:prettier/recommended", "plugin:node/recommended"],
   parser: "@typescript-eslint/parser",
