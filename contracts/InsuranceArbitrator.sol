@@ -135,8 +135,7 @@ contract InsuranceArbitrator {
 
         claimedPolicy.claimInitiated = true;
         uint256 timestamp = block.timestamp;
-        string memory insuredEvent = claimedPolicy.insuredEvent;
-        bytes memory ancillaryData = abi.encodePacked(ancillaryDataHead, insuredEvent, ancillaryDataTail);
+        bytes memory ancillaryData = abi.encodePacked(ancillaryDataHead, claimedPolicy.insuredEvent, ancillaryDataTail);
         bytes32 claimId = _getClaimId(timestamp, ancillaryData);
         insuranceClaims[claimId] = policyId;
 
@@ -144,8 +143,7 @@ contract InsuranceArbitrator {
         oo.requestPrice(priceIdentifier, timestamp, ancillaryData, currency, 0);
 
         // Configure price request parameters.
-        uint256 insuredAmount = claimedPolicy.insuredAmount;
-        uint256 proposerBond = (insuredAmount * oracleBondPercentage) / 1e18;
+        uint256 proposerBond = (claimedPolicy.insuredAmount * oracleBondPercentage) / 1e18;
         uint256 totalBond = oo.setBond(priceIdentifier, timestamp, ancillaryData, proposerBond);
         oo.setCustomLiveness(priceIdentifier, timestamp, ancillaryData, optimisticOracleLivenessTime);
         oo.setCallbacks(priceIdentifier, timestamp, ancillaryData, false, false, true);
@@ -185,13 +183,10 @@ contract InsuranceArbitrator {
         InsurancePolicy storage claimedPolicy = insurancePolicies[policyId];
         delete insuranceClaims[claimId];
 
-        address insuredAddress = claimedPolicy.insuredAddress;
-        uint256 insuredAmount = claimedPolicy.insuredAmount;
-
         // Deletes insurance policy and transfers claim amount if the claim was confirmed.
         if (price == 1e18) {
             delete insurancePolicies[policyId];
-            currency.safeTransfer(insuredAddress, insuredAmount);
+            currency.safeTransfer(claimedPolicy.insuredAddress, claimedPolicy.insuredAmount);
 
             emit ClaimAccepted(claimId, policyId);
             // Otherwise just reset the flag so that repeated claims can be made.
