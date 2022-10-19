@@ -66,7 +66,8 @@ contract OptimisticArbitrator {
 
     /**
      * @notice Ratifies an existing assertion to the DVM by disputing the proposed answer to the question.
-     * @dev The cost of rafiying an assertion in collateral token is equal to the final fee + bond / 2.
+     * @dev The proposer and disputer are the same address so the final cost of rafiying an assertion in collateral
+     *  token is equal to the final fee + bond / 2.
      * @param timestamp timestamp of the price being requested.
      * @param ancillaryData ancillary data representing additional args being passed with the price request.
      */
@@ -86,7 +87,8 @@ contract OptimisticArbitrator {
 
     /**
      * @notice Assert and ratifies a question to the DVM.
-     * @dev The cost of asserting and ratifying in collateral token is equal to the final fee as we set the bond to 0.
+     * @dev The proposer and disputer are the same address so the final cost of asserting and ratifying in collateral token
+     *  is equal to the final fee as we set the bond to 0.
      * @param timestamp timestamp of the price being requested.
      * @param ancillaryData ancillary data representing additional args being passed with the price request.
      */
