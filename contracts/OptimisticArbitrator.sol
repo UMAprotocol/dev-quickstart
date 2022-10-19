@@ -12,11 +12,10 @@ import "@uma/core/contracts/oracle/implementation/Constants.sol";
 
 /**
  * @title Optimistic Arbitrator
- * @notice This contract enables assertions to be made to the Optimistic Oracle and assertions to be ratified
- * by the UMA Data Verification Mechanism. An assertion consists of using the requestPrice and proposePrice
- * methods of the OptimisticOracle to confirm or deny the response to a question. To ratify an assertion,
- * an initial assertion must be made and disputed, such that the question is scaled to the DVM, where UMA token
- * holders vote on it.
+ * @notice This contract enables assertions to be made to the Optimistic Oracle and assertions to be ratified by the UMA
+ *  Data Verification Mechanism. An assertion consists of using the requestPrice and proposePrice methods of the OptimisticOracle to
+ *  confirm or deny the response to a question. To ratify an assertion, an initial assertion must be made and disputed, such that the
+ *  question is scaled to the DVM, where UMA token holders vote on it.
  * @dev This contract is stateless and solely encapsulates the DVM's functionality to leverage the Optimistic Arbitrator pattern.
  * @dev The Optimistic Oracle's functions are called on behalf of the caller, hence this contract will neither hold nor receive funds
  *  from these actions.
