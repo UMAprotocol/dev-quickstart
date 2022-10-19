@@ -8,10 +8,11 @@ import "@nomiclabs/hardhat-waffle";
 import "@typechain/hardhat";
 import "solidity-coverage";
 import "hardhat-deploy";
+import "@nomiclabs/hardhat-ethers";
 
 dotenv.config();
 
-const solcVersion = "0.8.13";
+const solcVersion = "0.8.17";
 const mnemonic = getMnemonic();
 
 const config: HardhatUserConfig = {
@@ -70,6 +71,10 @@ const config: HardhatUserConfig = {
     },
   },
   namedAccounts: { deployer: 0 },
+  typechain: {
+    outDir: "typechain",
+    target: "ethers-v5",
+  },
 };
 
 export default config;
