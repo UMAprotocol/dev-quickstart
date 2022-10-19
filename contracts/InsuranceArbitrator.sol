@@ -72,27 +72,9 @@ contract InsuranceArbitrator {
         address indexed insuredAddress,
         uint256 insuredAmount
     );
-    event ClaimSubmitted(
-        uint256 claimTimestamp,
-        bytes32 indexed policyId,
-        string insuredEvent,
-        address indexed insuredAddress,
-        uint256 insuredAmount
-    );
-    event ClaimAccepted(
-        uint256 claimTimestamp,
-        bytes32 indexed policyId,
-        string insuredEvent,
-        address indexed insuredAddress,
-        uint256 insuredAmount
-    );
-    event ClaimRejected(
-        uint256 claimTimestamp,
-        bytes32 indexed policyId,
-        string insuredEvent,
-        address indexed insuredAddress,
-        uint256 insuredAmount
-    );
+    event ClaimSubmitted(uint256 claimTimestamp, bytes32 indexed claimId, bytes32 indexed policyId);
+    event ClaimAccepted(bytes32 indexed claimId, bytes32 indexed policyId);
+    event ClaimRejected(bytes32 indexed claimId, bytes32 indexed policyId);
 
     /**
      * @notice Construct the InsuranceArbitrator
@@ -173,7 +155,7 @@ contract InsuranceArbitrator {
         currency.safeApprove(address(oo), totalBond);
         oo.proposePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData, int256(1e18));
 
-        emit ClaimSubmitted(timestamp, policyId, insuredEvent, claimedPolicy.insuredAddress, insuredAmount);
+        emit ClaimSubmitted(timestamp, claimId, policyId);
     }
 
     /******************************************
@@ -201,7 +183,6 @@ contract InsuranceArbitrator {
         // Claim can be settled only once, thus should be deleted.
         bytes32 policyId = insuranceClaims[claimId];
         InsurancePolicy storage claimedPolicy = insurancePolicies[policyId];
-        string memory insuredEvent = claimedPolicy.insuredEvent;
         delete insuranceClaims[claimId];
 
         address insuredAddress = claimedPolicy.insuredAddress;
@@ -212,12 +193,12 @@ contract InsuranceArbitrator {
             delete insurancePolicies[policyId];
             currency.safeTransfer(insuredAddress, insuredAmount);
 
-            emit ClaimAccepted(timestamp, policyId, insuredEvent, insuredAddress, insuredAmount);
+            emit ClaimAccepted(claimId, policyId);
             // Otherwise just reset the flag so that repeated claims can be made.
         } else {
             claimedPolicy.claimInitiated = false;
 
-            emit ClaimRejected(timestamp, policyId, insuredEvent, insuredAddress, insuredAmount);
+            emit ClaimRejected(claimId, policyId);
         }
     }
 
