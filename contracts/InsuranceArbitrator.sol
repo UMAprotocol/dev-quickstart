@@ -164,13 +164,12 @@ contract InsuranceArbitrator {
      * @notice Callback function called by the Optimistic Oracle when the claim is settled. If the claim is confirmed
      * this pays out insurance coverage to the insured beneficiary and deletes the insurance policy. If the claim is
      * rejected policy claim state is reset so that it is ready for the subsequent claim attempts.
-     * @param identifier Price identifier being requested.
      * @param timestamp Timestamp of the price being requested.
      * @param ancillaryData Ancillary data of the price being requested.
      * @param price Price that was resolved by the escalation process.
      */
     function priceSettled(
-        bytes32 identifier,
+        bytes32, // identifier passed by Optimistic Oracle, but not used here as it is always the same.
         uint256 timestamp,
         bytes memory ancillaryData,
         int256 price
