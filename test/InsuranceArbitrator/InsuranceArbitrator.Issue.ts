@@ -52,17 +52,17 @@ describe("Insurance Arbitrator: Issue", function () {
     const invalidInsuredEvent = "X".repeat(Number(invalidEventLength));
     await expect(
       insuranceArbitrator.connect(insurer).issueInsurance(invalidInsuredEvent, insured.address, insuredAmount)
-    ).to.revertedWith("Event description too long");
+    ).to.be.revertedWith("Event description too long");
   });
   it("Insured address verified", async function () {
     await expect(
       insuranceArbitrator.connect(insurer).issueInsurance(insuredEvent, ZERO_ADDRESS, insuredAmount)
-    ).to.revertedWith("Invalid insured address");
+    ).to.be.revertedWith("Invalid insured address");
   });
   it("Insured amount verified", async function () {
-    await expect(insuranceArbitrator.connect(insurer).issueInsurance(insuredEvent, insured.address, 0)).to.revertedWith(
-      "Amount should be above 0"
-    );
+    await expect(
+      insuranceArbitrator.connect(insurer).issueInsurance(insuredEvent, insured.address, 0)
+    ).to.be.revertedWith("Amount should be above 0");
   });
   it("Cannot issue the same policy in one block", async function () {
     // Double funding for the insurer.
