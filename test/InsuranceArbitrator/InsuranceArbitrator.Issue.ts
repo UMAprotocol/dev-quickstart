@@ -46,4 +46,11 @@ describe("Insurance Arbitrator: Issue", function () {
     expect(insurancePolicy.insuredAddress).to.equal(insured.address);
     expect(insurancePolicy.insuredAmount).to.equal(insuredAmount);
   });
+  it("Event description limits enforced", async function () {
+    const invalidEventLength = (await insuranceArbitrator.MAX_EVENT_DESCRIPTION_SIZE()).add(1);
+    const invalidInsuredEvent = "X".repeat(Number(invalidEventLength));
+    await expect(
+      insuranceArbitrator.connect(insurer).issueInsurance(invalidInsuredEvent, insured.address, insuredAmount)
+    ).to.revertedWith("Event description too long");
+  });
 });
