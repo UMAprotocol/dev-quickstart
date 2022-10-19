@@ -10,7 +10,7 @@ import { ethers, expect, SignerWithAddress } from "../utils";
 
 let optimisticArbitrator: OptimisticArbitrator, usdc: ExpandedERC20Ethers;
 let optimisticOracle: OptimisticOracleV2Ethers, store: StoreEthers, mockOracle: MockOracleAncillaryEthers;
-let deployer: SignerWithAddress;
+let deployer: SignerWithAddress, ancillaryData: Uint8Array, liveness: number;
 
 describe("OptimisticArbitrator: Lifecycle", function () {
   beforeEach(async function () {
@@ -20,6 +20,11 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     ({ optimisticArbitrator, usdc } = await optimisticArbitratorFixture());
 
     const amountToSeedWallets = ethers.utils.parseUnits("100000", await usdc.decimals()); // 10000 USDC
+
+    liveness = 3600; // 1 hour
+    ancillaryData = ethers.utils.toUtf8Bytes(
+      `q: title: Will the price of BTC be $18000.00 or more on October 10, 2022?, description: More info. res_data: p1: 0, p2: 1, p3: 0.5, p4: -57896044618658097711785492504343953926634992332820282019728.792003956564819968. Where p1 corresponds to No, p2 to a Yes, p3 to unknown/tie, and p4 to an early request`
+    );
 
     // Set the final fee in the store
     store.setFinalFee(usdc.address, { rawValue: ethers.utils.parseUnits("1500", await usdc.decimals()) });
@@ -34,12 +39,6 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     await optimisticOracle.setCurrentTime(requestTimestamp);
 
     const balanceBefore = await usdc.balanceOf(deployer.address);
-
-    const liveness = 3600; // 1 hour
-
-    const ancillaryData = ethers.utils.toUtf8Bytes(
-      `q: title: Will the price of BTC be $18000.00 or more on October 10, 2022?, description: More info. res_data: p1: 0, p2: 1, p3: 0.5, p4: -57896044618658097711785492504343953926634992332820282019728.792003956564819968. Where p1 corresponds to No, p2 to a Yes, p3 to unknown/tie, and p4 to an early request`
-    );
 
     const tx = await optimisticArbitrator.makeAssertion(
       requestTimestamp,
@@ -70,12 +69,6 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     const balanceBefore = await usdc.balanceOf(deployer.address);
 
     const bond = ethers.utils.parseUnits("500", await usdc.decimals());
-
-    const liveness = 3600; // 1 hour
-
-    const ancillaryData = ethers.utils.toUtf8Bytes(
-      `q: title: Will the price of BTC be $18000.00 or more on October 10, 2022?, description: More info. res_data: p1: 0, p2: 1, p3: 0.5, p4: -57896044618658097711785492504343953926634992332820282019728.792003956564819968. Where p1 corresponds to No, p2 to a Yes, p3 to unknown/tie, and p4 to an early request`
-    );
 
     await optimisticArbitrator.makeAssertion(
       requestTimestamp,
@@ -109,10 +102,6 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     const requestTimestamp = await (await ethers.provider.getBlock("latest")).timestamp;
     await optimisticOracle.setCurrentTime(requestTimestamp);
     const balanceBefore = await usdc.balanceOf(deployer.address);
-
-    const ancillaryData = ethers.utils.toUtf8Bytes(
-      `q: title: Will the price of BTC be $18000.00 or more on October 10, 2022?, description: More info. res_data: p1: 0, p2: 1, p3: 0.5, p4: -57896044618658097711785492504343953926634992332820282019728.792003956564819968. Where p1 corresponds to No, p2 to a Yes, p3 to unknown/tie, and p4 to an early request`
-    );
 
     await optimisticArbitrator.assertAndRatify(requestTimestamp, ancillaryData, 1);
 
