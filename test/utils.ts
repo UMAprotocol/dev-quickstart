@@ -6,6 +6,7 @@ import hre from "hardhat";
 import { ethers } from "hardhat";
 import { BigNumber, Signer, Contract, ContractFactory } from "ethers";
 import { FactoryOptions } from "hardhat/types";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 
 export interface SignerWithAddress extends Signer {
   address: string;
@@ -72,4 +73,4 @@ export const toWei = (num: string | number | BigNumber) => ethers.utils.parseEth
 
 export const utf8ToHex = (input: string) => ethers.utils.formatBytes32String(input);
 
-export { expect, Contract, ethers, hre, BigNumber, Signer };
+export { anyValue, expect, Contract, ethers, hre, BigNumber, Signer };
