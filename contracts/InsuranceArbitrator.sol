@@ -259,6 +259,7 @@ contract InsuranceArbitrator {
         uint256 insuredAmount
     ) internal pure returns (bytes32) {
         return keccak256(abi.encode(blockNumber, insuredEvent, insuredAddress, currency, insuredAmount));
+    }
 
     function _getClaimId(uint256 timestamp, bytes memory ancillaryData) internal pure returns (bytes32) {
         return keccak256(abi.encode(timestamp, ancillaryData));
