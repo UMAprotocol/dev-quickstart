@@ -43,8 +43,7 @@ contract InsuranceArbitrator {
     // Oracle proposal bond set to 0.1% of claimed insurance coverage.
     uint256 public constant oracleBondPercentage = 1e15;
 
-    // Optimistic oracle liveness set to 24h.
-    uint256 public constant optimisticOracleLivenessTime = 3600 * 24;
+    uint256 public constant optimisticOracleLivenessTime = 3600 * 24; // Optimistic oracle liveness set to 24h.
 
     // Price identifier to use when requesting claims through Optimistic Oracle.
     bytes32 public constant priceIdentifier = "YES_OR_NO_QUERY";
@@ -54,14 +53,11 @@ contract InsuranceArbitrator {
     string constant ancillaryDataHead = 'q:"Had the following insured event occurred as of request timestamp: ';
     string constant ancillaryDataTail = '?"';
 
-    // Finder for UMA contracts.
-    FinderInterface public immutable finder;
+    FinderInterface public immutable finder; // Finder for UMA contracts.
 
-    // Optimistic Oracle instance where claims are resolved.
-    OptimisticOracleV2Interface public immutable oo;
+    OptimisticOracleV2Interface public immutable oo; // Optimistic Oracle instance where claims are resolved.
 
-    // Denomination token for insurance coverage and bonding.
-    IERC20 public immutable currency;
+    IERC20 public immutable currency; // Denomination token for insurance coverage and bonding.
 
     uint256 public constant MAX_EVENT_DESCRIPTION_SIZE = 300; // Insured event description should be concise.
 
