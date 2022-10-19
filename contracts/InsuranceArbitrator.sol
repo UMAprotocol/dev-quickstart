@@ -215,7 +215,33 @@ contract InsuranceArbitrator {
         uint256 timestamp,
         bytes memory ancillaryData,
         int256 price
-    ) external {}
+    ) external {
+        bytes32 claimId = _getClaimId(timestamp, ancillaryData);
+        require(address(insuranceClaims[claimId].optimisticOracle) == msg.sender, "Unauthorized callback");
+
+        // Claim can be settled only once, thus should be deleted.
+        bytes32 policyId = insuranceClaims[claimId].policyId;
+        InsurancePolicy storage claimedPolicy = insurancePolicies[policyId];
+        string memory insuredEvent = claimedPolicy.insuredEvent;
+        delete insuranceClaims[claimId];
+
+        address insuredAddress = claimedPolicy.insuredAddress;
+        IERC20 currency = claimedPolicy.currency;
+        uint256 insuredAmount = claimedPolicy.insuredAmount;
+
+        // Deletes insurance policy and transfers claim amount if the claim was confirmed.
+        if (price == 1e18) {
+            delete insurancePolicies[policyId];
+            currency.safeTransfer(insuredAddress, insuredAmount);
+
+            emit ClaimAccepted(timestamp, policyId, insuredEvent, insuredAddress, currency, insuredAmount);
+            // Otherwise just reset the flag so that repeated claims can be made.
+        } else {
+            claimedPolicy.claimInitiated = false;
+
+            emit ClaimRejected(timestamp, policyId, insuredEvent, insuredAddress, currency, insuredAmount);
+        }
+    }
 
     /******************************************
      *           INTERNAL FUNCTIONS           *
