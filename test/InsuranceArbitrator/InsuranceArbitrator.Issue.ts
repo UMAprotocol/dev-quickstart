@@ -1,3 +1,4 @@
+import { ZERO_ADDRESS } from "@uma/common";
 import { ExpandedERC20Ethers } from "@uma/contracts-node";
 import { insuranceArbitratorFixture } from "../fixtures/InsuranceArbitrator.Fixture";
 import { umaEcosystemFixture } from "../fixtures/UmaEcosystem.Fixture";
@@ -52,5 +53,10 @@ describe("Insurance Arbitrator: Issue", function () {
     await expect(
       insuranceArbitrator.connect(insurer).issueInsurance(invalidInsuredEvent, insured.address, insuredAmount)
     ).to.revertedWith("Event description too long");
+  });
+  it("Insured address verified", async function () {
+    await expect(
+      insuranceArbitrator.connect(insurer).issueInsurance(insuredEvent, ZERO_ADDRESS, insuredAmount)
+    ).to.revertedWith("Invalid insured address");
   });
 });
