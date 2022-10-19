@@ -122,6 +122,7 @@ contract OptimisticArbitrator {
     }
 
     // Makes an assertion to the Optimistic Oracle by requesting a price and proposing a price.
+    // If the liveness is set to 0, the default liveness value is used.
     function _makeAssertion(
         uint256 timestamp,
         bytes memory ancillaryData,
