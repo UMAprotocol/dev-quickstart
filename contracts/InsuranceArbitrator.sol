@@ -34,18 +34,12 @@ contract InsuranceArbitrator {
         uint256 insuredAmount; // Amount of insurance coverage.
     }
 
-    // Tracks raised claims on insurance policies.
-    struct Claim {
-        bytes32 policyId; // Claimed policy identifier.
-        OptimisticOracleV2Interface oo; // optimistic oracle instance where claims are resolved.
-    }
-
     // References all active insurance policies by policyId.
     mapping(bytes32 => InsurancePolicy) public insurancePolicies;
 
-    // Maps hash of initiated claims to their policyId and optimistic oracle implementation.
+    // Maps hash of initiated claims to their policyId.
     // This is used in callback function to potentially pay out the beneficiary.
-    mapping(bytes32 => Claim) public insuranceClaims;
+    mapping(bytes32 => bytes32) public insuranceClaims;
 
     // Oracle proposal bond set to 0.1% of claimed insurance coverage.
     uint256 constant oracleBondPercentage = 1e15;
@@ -63,6 +57,9 @@ contract InsuranceArbitrator {
 
     // Finder for UMA contracts.
     FinderInterface public immutable finder;
+
+    // Optimistic Oracle instance where claims are resolved.
+    OptimisticOracleV2Interface public immutable oo;
 
     uint256 public constant MAX_EVENT_DESCRIPTION_SIZE = 300; // Insured event description should be concise.
 
@@ -109,6 +106,7 @@ contract InsuranceArbitrator {
      */
     constructor(address _finderAddress) {
         finder = FinderInterface(_finderAddress);
+        oo = OptimisticOracleV2Interface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracleV2));
     }
 
     /******************************************
@@ -166,10 +164,7 @@ contract InsuranceArbitrator {
         string memory insuredEvent = claimedPolicy.insuredEvent;
         bytes memory ancillaryData = abi.encodePacked(ancillaryDataHead, insuredEvent, ancillaryDataTail);
         bytes32 claimId = _getClaimId(timestamp, ancillaryData);
-        Claim storage newClaim = insuranceClaims[claimId];
-        newClaim.policyId = policyId;
-        OptimisticOracleV2Interface oo = _getOptimisticOracle();
-        newClaim.oo = oo;
+        insuranceClaims[claimId] = policyId;
 
         // Initiate price request at Optimistic Oracle.
         IERC20 currency = claimedPolicy.currency;
@@ -210,10 +205,10 @@ contract InsuranceArbitrator {
         int256 price
     ) external {
         bytes32 claimId = _getClaimId(timestamp, ancillaryData);
-        require(address(insuranceClaims[claimId].oo) == msg.sender, "Unauthorized callback");
+        require(address(oo) == msg.sender, "Unauthorized callback");
 
         // Claim can be settled only once, thus should be deleted.
-        bytes32 policyId = insuranceClaims[claimId].policyId;
+        bytes32 policyId = insuranceClaims[claimId];
         InsurancePolicy storage claimedPolicy = insurancePolicies[policyId];
         string memory insuredEvent = claimedPolicy.insuredEvent;
         delete insuranceClaims[claimId];
@@ -256,9 +251,5 @@ contract InsuranceArbitrator {
 
     function _getClaimId(uint256 timestamp, bytes memory ancillaryData) internal pure returns (bytes32) {
         return keccak256(abi.encode(timestamp, ancillaryData));
-    }
-
-    function _getOptimisticOracle() internal view returns (OptimisticOracleV2Interface) {
-        return OptimisticOracleV2Interface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracleV2));
     }
 }
