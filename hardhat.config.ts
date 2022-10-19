@@ -11,7 +11,7 @@ import "hardhat-deploy";
 
 dotenv.config();
 
-const solcVersion = "0.8.13";
+const solcVersion = "0.8.16";
 const mnemonic = getMnemonic();
 
 const config: HardhatUserConfig = {
