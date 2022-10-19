@@ -64,4 +64,44 @@ describe("Insurance Arbitrator: Issue", function () {
       "Amount should be above 0"
     );
   });
+  it("Cannot issue the same policy in one block", async function () {
+    // Double funding for the insurer.
+    await usdc.connect(deployer).mint(insurer.address, insuredAmount);
+    await usdc.connect(insurer).approve(insuranceArbitrator.address, insuredAmount.mul(2));
+
+    // Disable automining so that second transaction can be submitted without mining the first one.
+    await ethers.provider.send("evm_setAutomine", [false]);
+
+    // Submit both transactions with the same parameters and mine the block.
+    const tx1 = await insuranceArbitrator.connect(insurer).issueInsurance(insuredEvent, insured.address, insuredAmount);
+    const tx2 = await insuranceArbitrator.connect(insurer).issueInsurance(insuredEvent, insured.address, insuredAmount);
+    await ethers.provider.send("evm_mine", []);
+
+    // Second submitted transaction should revert as assigned policyId would be the same.
+    await expect(tx1.wait()).not.to.be.reverted;
+    await expect(tx2.wait()).to.be.reverted;
+
+    // Enable automining so that other tests are not affected.
+    await ethers.provider.send("evm_setAutomine", [true]);
+  });
+  it("Can issue different policies in one block", async function () {
+    // Double funding for the insurer.
+    await usdc.connect(deployer).mint(insurer.address, insuredAmount);
+    await usdc.connect(insurer).approve(insuranceArbitrator.address, insuredAmount.mul(2));
+
+    // Disable automining so that second transaction can be submitted without mining the first one.
+    await ethers.provider.send("evm_setAutomine", [false]);
+
+    // Submit both transactions with the different parameters and mine the block.
+    const tx1 = await insuranceArbitrator.connect(insurer).issueInsurance(insuredEvent, insured.address, insuredAmount);
+    const tx2 = await insuranceArbitrator.connect(insurer).issueInsurance("DIFFERENT", insured.address, insuredAmount);
+    await ethers.provider.send("evm_mine", []);
+
+    // Both submitted transactions should succeed as assigned policyId would be different.
+    await expect(tx1.wait()).not.to.be.reverted;
+    await expect(tx2.wait()).not.to.be.reverted;
+
+    // Enable automining so that other tests are not affected.
+    await ethers.provider.send("evm_setAutomine", [true]);
+  });
 });
