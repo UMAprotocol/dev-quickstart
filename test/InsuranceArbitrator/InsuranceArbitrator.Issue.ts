@@ -27,12 +27,12 @@ describe("Insurance Arbitrator: Issue", function () {
     // Issue new insurance policy.
     const issueInsuranceTx = insuranceArbitrator
       .connect(insurer)
-      .issueInsurance(insuredEvent, insured.address, usdc.address, insuredAmount);
+      .issueInsurance(insuredEvent, insured.address, insuredAmount);
 
     // Verify emitted transaction log.
     await expect(issueInsuranceTx)
       .to.emit(insuranceArbitrator, "PolicyIssued")
-      .withArgs(anyValue, insurer.address, insuredEvent, insured.address, usdc.address, insuredAmount);
+      .withArgs(anyValue, insurer.address, insuredEvent, insured.address, insuredAmount);
 
     // Verify insured amount has been deposited.
     expect(await usdc.balanceOf(insurer.address)).to.equal(insurerBalanceBefore.sub(insuredAmount));
@@ -44,7 +44,6 @@ describe("Insurance Arbitrator: Issue", function () {
     expect(insurancePolicy.claimInitiated).to.equal(false);
     expect(insurancePolicy.insuredEvent).to.equal(insuredEvent);
     expect(insurancePolicy.insuredAddress).to.equal(insured.address);
-    expect(insurancePolicy.currency).to.equal(usdc.address);
     expect(insurancePolicy.insuredAmount).to.equal(insuredAmount);
   });
 });

@@ -32,7 +32,7 @@ export async function deployInsuranceArbitrator(ethers: typeof hre.ethers) {
   // Deploy the InsuranceArbitrator contract.
   const insuranceArbitrator = (await (
     await getContractFactory("InsuranceArbitrator", deployer)
-  ).deploy(parentFixture.finder.address, parentFixture.timer.address)) as InsuranceArbitrator;
+  ).deploy(parentFixture.finder.address, usdc.address, parentFixture.timer.address)) as InsuranceArbitrator;
 
   return { usdc, insuranceArbitrator };
 }
