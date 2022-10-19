@@ -62,9 +62,7 @@ contract OptimisticArbitrator {
         uint256 bond,
         uint64 liveness
     ) public {
-        uint256 totalAmount = reward + bond + _getStore().computeFinalFee(address(currency)).rawValue;
-        _pullAndApprove(totalAmount);
-
+        _pullAndApprove(reward + bond + _getStore().computeFinalFee(address(currency)).rawValue);
         _makeAssertion(timestamp, ancillaryData, proposedPrice, reward, bond, liveness);
     }
 
@@ -84,10 +82,7 @@ contract OptimisticArbitrator {
             timestamp,
             ancillaryData
         );
-
-        uint256 totalAmount = request.requestSettings.bond + _getStore().computeFinalFee(address(currency)).rawValue;
-        _pullAndApprove(totalAmount);
-
+        _pullAndApprove(request.requestSettings.bond + _getStore().computeFinalFee(address(currency)).rawValue);
         oo.disputePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData);
     }
 
@@ -105,9 +100,7 @@ contract OptimisticArbitrator {
         bytes memory ancillaryData,
         int256 proposedPrice
     ) public {
-        uint256 totalAmount = 2 * _getStore().computeFinalFee(address(currency)).rawValue;
-        _pullAndApprove(totalAmount);
-
+        _pullAndApprove(2 * _getStore().computeFinalFee(address(currency)).rawValue);
         _makeAssertion(timestamp, ancillaryData, proposedPrice, 0, 0, 0);
         oo.disputePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData);
     }
