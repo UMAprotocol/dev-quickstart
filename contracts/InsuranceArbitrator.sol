@@ -4,8 +4,9 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
+import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
+import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
 import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
 
 /**
@@ -40,7 +41,7 @@ contract InsuranceArbitrator {
     }
 
     // References all active insurance policies by policyId.
-    mapping(bytes32 => InsurancePolicy) insurancePolicies;
+    mapping(bytes32 => InsurancePolicy) public insurancePolicies;
 
     // Maps hash of initiated claims to their policyId and optimistic oracle implementation.
     // This is used in callback function to potentially pay out the beneficiary.
@@ -50,10 +51,10 @@ contract InsuranceArbitrator {
     uint256 constant oracleBondPercentage = 1e15;
 
     // Optimistic oracle liveness set to 24h.
-    uint256 constant optimisticOracleLivenessTime = 3600 * 24;
+    uint256 public constant optimisticOracleLivenessTime = 3600 * 24;
 
     // Price identifier to use when requesting claims through Optimistic Oracle.
-    bytes32 constant priceIdentifier = "YES_OR_NO_QUERY";
+    bytes32 public constant priceIdentifier = "YES_OR_NO_QUERY";
 
     // Template for constructing ancillary data. The claim would insert insuredEvent in between when requesting
     // through Optimistic Oracle.
@@ -62,6 +63,8 @@ contract InsuranceArbitrator {
 
     // Finder for UMA contracts.
     FinderInterface public finder;
+
+    uint256 public constant MAX_EVENT_DESCRIPTION_SIZE = 300; // Insured event description should be concise.
 
     /****************************************
      *                EVENTS                *
@@ -104,7 +107,9 @@ contract InsuranceArbitrator {
      * @notice Construct the InsuranceArbitrator
      * @param _finderAddress DVM finder to find other UMA ecosystem contracts.
      */
-    constructor(address _finderAddress) {}
+    constructor(address _finderAddress) {
+        finder = FinderInterface(_finderAddress);
+    }
 
     /******************************************
      *          INSURANCE FUNCTIONS           *
@@ -123,9 +128,26 @@ contract InsuranceArbitrator {
     function issueInsurance(
         string calldata insuredEvent,
         address insuredAddress,
-        address currency,
+        IERC20 currency,
         uint256 insuredAmount
-    ) external returns (bytes32 policyId) {}
+    ) external returns (bytes32 policyId) {
+        require(bytes(insuredEvent).length <= MAX_EVENT_DESCRIPTION_SIZE, "Event description too long");
+        require(insuredAddress != address(0), "Invalid insured address");
+        require(_getCollateralWhitelist().isOnWhitelist(address(currency)), "Unsupported currency");
+        require(insuredAmount > 0, "Amount should be above 0");
+        policyId = _getPolicyId(block.number, insuredEvent, insuredAddress, currency, insuredAmount);
+        require(insurancePolicies[policyId].insuredAddress == address(0), "Policy already issued");
+
+        InsurancePolicy storage newPolicy = insurancePolicies[policyId];
+        newPolicy.insuredEvent = insuredEvent;
+        newPolicy.insuredAddress = insuredAddress;
+        newPolicy.currency = currency;
+        newPolicy.insuredAmount = insuredAmount;
+
+        currency.safeTransferFrom(msg.sender, address(this), insuredAmount);
+
+        emit PolicyIssued(policyId, msg.sender, insuredEvent, insuredAddress, currency, insuredAmount);
+    }
 
     /**
      * @notice Anyone can submit insurance claim posting oracle bonding. Only one simultaneous claim per insurance
@@ -198,6 +220,19 @@ contract InsuranceArbitrator {
     /******************************************
      *           INTERNAL FUNCTIONS           *
      ******************************************/
+
+    function _getCollateralWhitelist() internal view returns (AddressWhitelist) {
+        return AddressWhitelist(finder.getImplementationAddress(OracleInterfaces.CollateralWhitelist));
+    }
+
+    function _getPolicyId(
+        uint256 blockNumber,
+        string memory insuredEvent,
+        address insuredAddress,
+        IERC20 currency,
+        uint256 insuredAmount
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encode(blockNumber, insuredEvent, insuredAddress, currency, insuredAmount));
 
     function _getClaimId(uint256 timestamp, bytes memory ancillaryData) internal pure returns (bytes32) {
         return keccak256(abi.encode(timestamp, ancillaryData));
