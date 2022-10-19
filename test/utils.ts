@@ -71,6 +71,9 @@ export function getAllFilesInPath(dirPath: string, arrayOfFiles: string[] = []):
 
 export const toWei = (num: string | number | BigNumber) => ethers.utils.parseEther(num.toString());
 
+export const parseUnits = (num: string | number | BigNumber, dec: string | number | BigNumber) =>
+  ethers.utils.parseUnits(num.toString(), dec.toString());
+
 export const utf8ToHex = (input: string) => ethers.utils.formatBytes32String(input);
 
 export { anyValue, expect, Contract, ethers, hre, BigNumber, Signer };

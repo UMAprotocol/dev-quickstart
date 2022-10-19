@@ -3,21 +3,17 @@ import { insuranceArbitratorFixture } from "../fixtures/InsuranceArbitrator.Fixt
 import { umaEcosystemFixture } from "../fixtures/UmaEcosystem.Fixture";
 import { anyValue, BigNumber, expect, ethers, SignerWithAddress } from "../utils";
 import { InsuranceArbitrator } from "../../typechain";
+import { insuredAmount, insuredEvent } from "./constants";
 import { getPolicyIdFromTx } from "./utils";
 
 let insuranceArbitrator: InsuranceArbitrator, usdc: ExpandedERC20Ethers;
 let deployer: SignerWithAddress, insurer: SignerWithAddress, insured: SignerWithAddress;
-let insuredAmount: BigNumber;
-let insuredEvent: string;
 
 describe("Insurance Arbitrator: Issue", function () {
   beforeEach(async function () {
     [deployer, insurer, insured] = await ethers.getSigners();
     await umaEcosystemFixture();
     ({ usdc, insuranceArbitrator } = await insuranceArbitratorFixture());
-
-    insuredAmount = ethers.utils.parseUnits("157000", await usdc.decimals()); // 157000 USDC
-    insuredEvent = "Bad things have happened";
 
     // mint some fresh tokens for the insurer.
     await usdc.connect(deployer).mint(insurer.address, insuredAmount);
