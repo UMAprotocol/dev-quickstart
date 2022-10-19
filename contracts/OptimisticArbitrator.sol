@@ -48,9 +48,7 @@ contract OptimisticArbitrator {
             timestamp,
             ancillaryData
         );
-        uint256 totalAmount = request.reward +
-            request.requestSettings.bond +
-            _getStore().computeFinalFee(address(currency)).rawValue;
+        uint256 totalAmount = request.requestSettings.bond + _getStore().computeFinalFee(address(currency)).rawValue;
         _pullAndApprove(address(oo), totalAmount);
         oo.disputePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData);
     }

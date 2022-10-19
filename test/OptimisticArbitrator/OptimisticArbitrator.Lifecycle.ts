@@ -10,12 +10,12 @@ import { ethers, expect, SignerWithAddress } from "../utils";
 
 let optimisticArbitrator: OptimisticArbitrator, usdc: ExpandedERC20Ethers;
 let optimisticOracle: OptimisticOracleV2Ethers, store: StoreEthers, mockOracle: MockOracleAncillaryEthers;
-let requester: SignerWithAddress, proposer: SignerWithAddress, disputer: SignerWithAddress;
+let deployer: SignerWithAddress;
 
 describe("OptimisticArbitrator: Lifecycle", function () {
   beforeEach(async function () {
     // Load accounts and run fixtures to set up tests.
-    [requester, proposer, disputer] = await ethers.getSigners();
+    [deployer] = await ethers.getSigners();
     ({ optimisticOracle, mockOracle, store } = await umaEcosystemFixture());
     ({ optimisticArbitrator, usdc } = await optimisticArbitratorFixture());
 
@@ -24,15 +24,15 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     // Set the final fee in the store
     store.setFinalFee(usdc.address, { rawValue: ethers.utils.parseUnits("1500", await usdc.decimals()) });
 
-    // Mint some fresh tokens for the requester, requester and disputer.
-    await seedAndApprove([requester, disputer], usdc, amountToSeedWallets, optimisticArbitrator.address);
-    // Approve the Optimistic Oracle to spend bond tokens from the disputer and requester.
-    await seedAndApprove([disputer, requester], usdc, amountToSeedWallets, optimisticOracle.address);
+    // Mint some fresh tokens for the deployer.
+    await seedAndApprove([deployer], usdc, amountToSeedWallets, optimisticArbitrator.address);
   });
 
   it("Happy path", async function () {
     const requestTimestamp = await optimisticArbitrator.getCurrentTime();
     await optimisticOracle.setCurrentTime(requestTimestamp);
+
+    const balanceBefore = await usdc.balanceOf(deployer.address);
 
     const liveness = 3600; // 1 hour
 
@@ -64,11 +64,16 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     );
 
     expect((await optimisticArbitrator.getTruth(requestTimestamp, ancillaryData)).toNumber()).to.equal(1);
+    expect(await usdc.balanceOf(deployer.address)).to.equal(balanceBefore);
   });
 
   it("Assert then ratify", async function () {
     const requestTimestamp = await optimisticArbitrator.getCurrentTime();
     await optimisticOracle.setCurrentTime(requestTimestamp);
+
+    const balanceBefore = await usdc.balanceOf(deployer.address);
+
+    const bond = ethers.utils.parseUnits("500", await usdc.decimals());
 
     const liveness = 3600; // 1 hour
 
@@ -81,7 +86,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
       ancillaryData,
       1,
       ethers.utils.parseUnits("20", await usdc.decimals()),
-      ethers.utils.parseUnits("500", await usdc.decimals()),
+      bond,
       liveness
     );
 
@@ -93,7 +98,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
       disputedPriceRequest.args.identifier,
       disputedPriceRequest.args.time,
       disputedPriceRequest.args.ancillaryData,
-      1
+      0
     );
 
     await optimisticOracle.settle(
@@ -103,7 +108,10 @@ describe("OptimisticArbitrator: Lifecycle", function () {
       ancillaryData
     );
 
-    expect((await optimisticArbitrator.getTruth(requestTimestamp, ancillaryData)).toNumber()).to.equal(1);
+    expect((await optimisticArbitrator.getTruth(requestTimestamp, ancillaryData)).toNumber()).to.equal(0);
+
+    const expectedCost = await (await store.finalFees(usdc.address)).add(bond.div(2));
+    expect(await usdc.balanceOf(deployer.address)).to.equal(balanceBefore.sub(expectedCost));
   });
 
   it("Assert and ratify", async function () {
