@@ -62,7 +62,7 @@ contract InsuranceArbitrator {
     string constant ancillaryDataTail = '?"';
 
     // Finder for UMA contracts.
-    FinderInterface public finder;
+    FinderInterface public immutable finder;
 
     uint256 public constant MAX_EVENT_DESCRIPTION_SIZE = 300; // Insured event description should be concise.
 
