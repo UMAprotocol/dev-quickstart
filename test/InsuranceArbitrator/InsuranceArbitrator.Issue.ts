@@ -59,4 +59,9 @@ describe("Insurance Arbitrator: Issue", function () {
       insuranceArbitrator.connect(insurer).issueInsurance(insuredEvent, ZERO_ADDRESS, insuredAmount)
     ).to.revertedWith("Invalid insured address");
   });
+  it("Insured amount verified", async function () {
+    await expect(insuranceArbitrator.connect(insurer).issueInsurance(insuredEvent, insured.address, 0)).to.revertedWith(
+      "Amount should be above 0"
+    );
+  });
 });
