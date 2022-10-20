@@ -82,4 +82,15 @@ describe("Insurance Arbitrator: Claim", function () {
       "Insurance not issued"
     );
   });
+  it("Cannot have simultaneous claims on one policy", async function () {
+    // Double funding for the claimer.
+    await usdc.connect(deployer).mint(claimant.address, expectedBond);
+    await usdc.connect(claimant).approve(insuranceArbitrator.address, expectedBond.mul(2));
+
+    // Repeated claim on the same policy should revert.
+    await expect(insuranceArbitrator.connect(claimant).submitClaim(policyId)).not.to.be.reverted;
+    await expect(insuranceArbitrator.connect(claimant).submitClaim(policyId)).to.be.revertedWith(
+      "Claim already initiated"
+    );
+  });
 });
