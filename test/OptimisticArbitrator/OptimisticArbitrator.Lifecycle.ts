@@ -12,6 +12,8 @@ let optimisticArbitrator: OptimisticArbitrator, usdc: ExpandedERC20Ethers;
 let optimisticOracle: OptimisticOracleV2Ethers, store: StoreEthers, mockOracle: MockOracleAncillaryEthers;
 let deployer: SignerWithAddress, ancillaryData: Uint8Array, liveness: number;
 
+const YES_ANSWER = ethers.utils.parseEther("1");
+
 describe("OptimisticArbitrator: Lifecycle", function () {
   beforeEach(async function () {
     // Load accounts and run fixtures to set up tests.
@@ -22,8 +24,9 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     const amountToSeedWallets = ethers.utils.parseUnits("100000", await usdc.decimals()); // 10000 USDC
 
     liveness = 3600; // 1 hour
+
     ancillaryData = ethers.utils.toUtf8Bytes(
-      `assertion: The price of BTC was above $18000 for the duration of October 10, 2022, UTC time, considering top 5 volume weighted markets. res_data: p1: 0, p2: 1. Where p1 corresponds to False, p2 to True`
+      `q: The price of BTC was above $18000 for the duration of October 10, 2022, UTC time, considering top 5 volume weighted markets.`
     );
 
     // Set the final fee in the store
@@ -43,7 +46,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     const tx = await optimisticArbitrator.makeAssertion(
       requestTimestamp,
       ancillaryData,
-      1,
+      YES_ANSWER,
       ethers.utils.parseUnits("20", await usdc.decimals()),
       ethers.utils.parseUnits("500", await usdc.decimals()),
       liveness
@@ -58,7 +61,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
 
     optimisticArbitrator.settleAndGetResult(requestTimestamp, ancillaryData);
 
-    expect((await optimisticArbitrator.getResult(requestTimestamp, ancillaryData)).toNumber()).to.equal(1);
+    expect(await (await optimisticArbitrator.getResult(requestTimestamp, ancillaryData)).eq(YES_ANSWER));
     expect(await usdc.balanceOf(deployer.address)).to.equal(balanceBefore);
   });
 
@@ -73,7 +76,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     await optimisticArbitrator.makeAssertion(
       requestTimestamp,
       ancillaryData,
-      1,
+      YES_ANSWER,
       ethers.utils.parseUnits("20", await usdc.decimals()),
       bond,
       liveness
@@ -92,7 +95,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
 
     await optimisticArbitrator.settleAndGetResult(requestTimestamp, ancillaryData);
 
-    expect((await optimisticArbitrator.getResult(requestTimestamp, ancillaryData)).toNumber()).to.equal(0);
+    expect((await optimisticArbitrator.getResult(requestTimestamp, ancillaryData)).eq(0));
 
     const expectedCost = await (await store.finalFees(usdc.address)).add(bond.div(2));
     expect(await usdc.balanceOf(deployer.address)).to.equal(balanceBefore.sub(expectedCost));
@@ -103,7 +106,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     await optimisticOracle.setCurrentTime(requestTimestamp);
     const balanceBefore = await usdc.balanceOf(deployer.address);
 
-    await optimisticArbitrator.assertAndRatify(requestTimestamp, ancillaryData, 1);
+    await optimisticArbitrator.assertAndRatify(requestTimestamp, ancillaryData, YES_ANSWER);
 
     // In the meantime simulate a vote in the DVM in which the originally disputed price is accepted.
     const disputedPriceRequest = (await mockOracle.queryFilter(mockOracle.filters.PriceRequestAdded()))[0];
@@ -111,12 +114,12 @@ describe("OptimisticArbitrator: Lifecycle", function () {
       disputedPriceRequest.args.identifier,
       disputedPriceRequest.args.time,
       disputedPriceRequest.args.ancillaryData,
-      1
+      YES_ANSWER
     );
 
     optimisticArbitrator.settleAndGetResult(requestTimestamp, ancillaryData);
 
-    expect((await optimisticArbitrator.getResult(requestTimestamp, ancillaryData)).toNumber()).to.equal(1);
+    expect(await (await optimisticArbitrator.getResult(requestTimestamp, ancillaryData)).eq(YES_ANSWER));
     const expectedCost = await await store.finalFees(usdc.address);
     expect(await usdc.balanceOf(deployer.address)).to.equal(balanceBefore.sub(expectedCost));
   });

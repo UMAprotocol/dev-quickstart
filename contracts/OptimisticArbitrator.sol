@@ -68,7 +68,7 @@ contract OptimisticArbitrator {
 
     /**
      * @notice Ratifies an existing assertion to the DVM by disputing the proposed answer to the question.
-     * @dev The proposer and disputer are the same address so the final cost of rafiying an assertion in collateral
+     * @dev If the proposer and disputer are the same address then the final cost of rafiying an assertion in collateral
      *  token is equal to the final fee + bond / 2.
      * @dev The Optimistic Oracle price dispute is submitted on behalf of the caller, therefore only the caller,
      *  and not the Optimist Arbitrator, will hold or receive funds.
