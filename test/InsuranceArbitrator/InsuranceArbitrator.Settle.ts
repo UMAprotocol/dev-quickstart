@@ -9,7 +9,7 @@ import { insuranceArbitratorFixture } from "../fixtures/InsuranceArbitrator.Fixt
 import { umaEcosystemFixture } from "../fixtures/UmaEcosystem.Fixture";
 import { BigNumber, expect, ethers, SignerWithAddress, toWei } from "../utils";
 import { InsuranceArbitrator } from "../../typechain";
-import { identifier, insuredAmount, insuredEvent, YES_ANSWER } from "./constants";
+import { identifier, insuredAmount, insuredEvent, NO_ANSWER, YES_ANSWER } from "./constants";
 import { constructAncillaryData, getClaimIdFromTx, getExpirationTime, getPolicyIdFromTx } from "./utils";
 
 let insuranceArbitrator: InsuranceArbitrator,
@@ -111,7 +111,6 @@ describe("Insurance Arbitrator: Settle", function () {
     );
 
     // Settle through Optimistic Oracle.
-    //await optimisticOracle.setCurrentTime(expectedExpirationTime);
     const settleTx = optimisticOracle
       .connect(settler)
       .settle(insuranceArbitrator.address, identifier, requestTime, expectedAncillaryData);
@@ -129,5 +128,39 @@ describe("Insurance Arbitrator: Settle", function () {
     await expect(insuranceArbitrator.connect(claimant).submitClaim(policyId)).to.be.revertedWith(
       "Insurance not issued"
     );
+  });
+  it("DVM resolved claim invalid", async function () {
+    const contractBalanceBefore = await usdc.balanceOf(insuranceArbitrator.address);
+
+    // Dispute insurance claim.
+    await optimisticOracle
+      .connect(disputer)
+      .disputePrice(insuranceArbitrator.address, identifier, requestTime, expectedAncillaryData);
+
+    // Simulate a vote in the DVM in which the originally disputed claim is confirmed invalid.
+    const disputedPriceRequest = (await mockOracle.queryFilter(mockOracle.filters.PriceRequestAdded()))[0];
+    await mockOracle.pushPrice(
+      disputedPriceRequest.args.identifier,
+      disputedPriceRequest.args.time,
+      disputedPriceRequest.args.ancillaryData,
+      NO_ANSWER
+    );
+
+    // Settle through Optimistic Oracle.
+    const settleTx = optimisticOracle
+      .connect(settler)
+      .settle(insuranceArbitrator.address, identifier, requestTime, expectedAncillaryData);
+
+    // Verify emitted transaction log.
+    await expect(settleTx).to.emit(insuranceArbitrator, "ClaimRejected").withArgs(claimId, policyId);
+
+    // Verify no insured amount has been paid.
+    expect(await usdc.balanceOf(insuranceArbitrator.address)).to.equal(contractBalanceBefore);
+
+    // Repeated claim on rejected claim should now be possible after Timer has been advanced.
+    await usdc.connect(deployer).mint(claimant.address, expectedBond);
+    await usdc.connect(claimant).approve(insuranceArbitrator.address, expectedBond);
+    await optimisticOracle.setCurrentTime((await (await ethers.provider.getBlock("latest")).timestamp) + 1);
+    await expect(insuranceArbitrator.connect(claimant).submitClaim(policyId)).not.to.be.reverted;
   });
 });
