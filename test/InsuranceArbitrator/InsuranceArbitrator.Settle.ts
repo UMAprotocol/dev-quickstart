@@ -1,16 +1,23 @@
-import { ExpandedERC20Ethers, OptimisticOracleV2Ethers, StoreEthers, TimerEthers } from "@uma/contracts-node";
+import {
+  ExpandedERC20Ethers,
+  MockOracleAncillaryEthers,
+  OptimisticOracleV2Ethers,
+  StoreEthers,
+  TimerEthers,
+} from "@uma/contracts-node";
 import { insuranceArbitratorFixture } from "../fixtures/InsuranceArbitrator.Fixture";
 import { umaEcosystemFixture } from "../fixtures/UmaEcosystem.Fixture";
-import { anyValue, BigNumber, expect, ethers, SignerWithAddress, toWei, randomBytes32 } from "../utils";
+import { BigNumber, expect, ethers, SignerWithAddress, toWei } from "../utils";
 import { InsuranceArbitrator } from "../../typechain";
-import { identifier, insuredAmount, insuredEvent, yesPrice } from "./constants";
+import { identifier, insuredAmount, insuredEvent, YES_ANSWER } from "./constants";
 import { constructAncillaryData, getClaimIdFromTx, getExpirationTime, getPolicyIdFromTx } from "./utils";
 
 let insuranceArbitrator: InsuranceArbitrator,
   usdc: ExpandedERC20Ethers,
   store: StoreEthers,
   optimisticOracle: OptimisticOracleV2Ethers,
-  timer: TimerEthers;
+  timer: TimerEthers,
+  mockOracle: MockOracleAncillaryEthers;
 let deployer: SignerWithAddress,
   insurer: SignerWithAddress,
   insured: SignerWithAddress,
@@ -25,7 +32,7 @@ let requestTime: BigNumber, expectedExpirationTime: BigNumber;
 describe("Insurance Arbitrator: Settle", function () {
   beforeEach(async function () {
     [deployer, insurer, insured, claimant, disputer, settler] = await ethers.getSigners();
-    ({ store, optimisticOracle, timer } = await umaEcosystemFixture());
+    ({ store, optimisticOracle, timer, mockOracle } = await umaEcosystemFixture());
     ({ usdc, insuranceArbitrator } = await insuranceArbitratorFixture());
 
     // Mint and approve insuredAmount tokens for the insurer.
@@ -64,8 +71,6 @@ describe("Insurance Arbitrator: Settle", function () {
   it("Settle after liveness without dispute", async function () {
     const insuredBalanceBefore = await usdc.balanceOf(insured.address);
     const contractBalanceBefore = await usdc.balanceOf(insuranceArbitrator.address);
-    const claimantBalanceBefore = await usdc.balanceOf(claimant.address);
-    const ooBalanceBefore = await usdc.balanceOf(optimisticOracle.address);
 
     // Advance time post liveness and settle through Optimistic Oracle.
     await optimisticOracle.setCurrentTime(expectedExpirationTime);
@@ -76,11 +81,47 @@ describe("Insurance Arbitrator: Settle", function () {
     // Verify emitted transaction log.
     await expect(settleTx).to.emit(insuranceArbitrator, "ClaimAccepted").withArgs(claimId, policyId);
 
-    // Verify insured amount has been paid and bond returned.
+    // Verify insured amount has been paid.
     expect(await usdc.balanceOf(insured.address)).to.equal(insuredBalanceBefore.add(insuredAmount));
     expect(await usdc.balanceOf(insuranceArbitrator.address)).to.equal(contractBalanceBefore.sub(insuredAmount));
-    expect(await usdc.balanceOf(claimant.address)).to.equal(claimantBalanceBefore.add(expectedBond));
-    expect(await usdc.balanceOf(optimisticOracle.address)).to.equal(ooBalanceBefore.sub(expectedBond));
+
+    // Repeated claim on paid out insurance should not be possible.
+    await usdc.connect(deployer).mint(claimant.address, expectedBond);
+    await usdc.connect(claimant).approve(insuranceArbitrator.address, expectedBond);
+    await expect(insuranceArbitrator.connect(claimant).submitClaim(policyId)).to.be.revertedWith(
+      "Insurance not issued"
+    );
+  });
+  it("DVM resolved claim valid", async function () {
+    const insuredBalanceBefore = await usdc.balanceOf(insured.address);
+    const contractBalanceBefore = await usdc.balanceOf(insuranceArbitrator.address);
+
+    // Dispute insurance claim.
+    await optimisticOracle
+      .connect(disputer)
+      .disputePrice(insuranceArbitrator.address, identifier, requestTime, expectedAncillaryData);
+
+    // Simulate a vote in the DVM in which the originally disputed claim is confirmed valid.
+    const disputedPriceRequest = (await mockOracle.queryFilter(mockOracle.filters.PriceRequestAdded()))[0];
+    await mockOracle.pushPrice(
+      disputedPriceRequest.args.identifier,
+      disputedPriceRequest.args.time,
+      disputedPriceRequest.args.ancillaryData,
+      YES_ANSWER
+    );
+
+    // Settle through Optimistic Oracle.
+    //await optimisticOracle.setCurrentTime(expectedExpirationTime);
+    const settleTx = optimisticOracle
+      .connect(settler)
+      .settle(insuranceArbitrator.address, identifier, requestTime, expectedAncillaryData);
+
+    // Verify emitted transaction log.
+    await expect(settleTx).to.emit(insuranceArbitrator, "ClaimAccepted").withArgs(claimId, policyId);
+
+    // Verify insured amount has been paid.
+    expect(await usdc.balanceOf(insured.address)).to.equal(insuredBalanceBefore.add(insuredAmount));
+    expect(await usdc.balanceOf(insuranceArbitrator.address)).to.equal(contractBalanceBefore.sub(insuredAmount));
 
     // Repeated claim on paid out insurance should not be possible.
     await usdc.connect(deployer).mint(claimant.address, expectedBond);

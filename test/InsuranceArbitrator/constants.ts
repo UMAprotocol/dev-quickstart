@@ -6,7 +6,7 @@ export const insuredEvent = "Bad things have happened";
 
 export const identifier = utf8ToHex("YES_OR_NO_QUERY");
 
-export const yesPrice = toWei("1");
+export const YES_ANSWER = toWei("1");
 
 export const ancillaryDataHead = 'q:"Had the following insured event occurred as of request timestamp: ';
 

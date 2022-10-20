@@ -3,7 +3,7 @@ import { insuranceArbitratorFixture } from "../fixtures/InsuranceArbitrator.Fixt
 import { umaEcosystemFixture } from "../fixtures/UmaEcosystem.Fixture";
 import { anyValue, BigNumber, expect, ethers, SignerWithAddress, toWei, randomBytes32 } from "../utils";
 import { InsuranceArbitrator } from "../../typechain";
-import { identifier, insuredAmount, insuredEvent, yesPrice } from "./constants";
+import { identifier, insuredAmount, insuredEvent, YES_ANSWER } from "./constants";
 import { constructAncillaryData, getClaimIdFromTx, getExpirationTime, getPolicyIdFromTx } from "./utils";
 
 let insuranceArbitrator: InsuranceArbitrator,
@@ -72,7 +72,7 @@ describe("Insurance Arbitrator: Claim", function () {
     );
     expect(request.proposer).to.equal(claimant.address);
     expect(request.currency).to.equal(usdc.address);
-    expect(request.proposedPrice).to.equal(yesPrice);
+    expect(request.proposedPrice).to.equal(YES_ANSWER);
     expect(request.expirationTime).to.equal(expectedExpirationTime);
     expect(request.requestSettings.callbackOnPriceSettled).to.equal(true);
   });
