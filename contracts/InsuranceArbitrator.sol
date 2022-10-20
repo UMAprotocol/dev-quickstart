@@ -178,7 +178,7 @@ contract InsuranceArbitrator {
 
         // Claim can be settled only once, thus should be deleted.
         bytes32 policyId = insuranceClaims[claimId];
-        InsurancePolicy storage claimedPolicy = insurancePolicies[policyId];
+        InsurancePolicy memory claimedPolicy = insurancePolicies[policyId];
         delete insuranceClaims[claimId];
 
         // Deletes insurance policy and transfers claim amount if the claim was confirmed.
@@ -189,7 +189,7 @@ contract InsuranceArbitrator {
             emit ClaimAccepted(claimId, policyId);
             // Otherwise just reset the flag so that repeated claims can be made.
         } else {
-            claimedPolicy.claimInitiated = false;
+            insurancePolicies[policyId].claimInitiated = false;
 
             emit ClaimRejected(claimId, policyId);
         }
