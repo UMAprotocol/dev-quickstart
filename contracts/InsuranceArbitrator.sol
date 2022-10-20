@@ -41,8 +41,7 @@ contract InsuranceArbitrator is Testable {
     // This is used in callback function to potentially pay out the beneficiary.
     mapping(bytes32 => bytes32) public insuranceClaims;
 
-    // Oracle proposal bond set to 0.1% of claimed insurance coverage.
-    uint256 public constant oracleBondPercentage = 1e15;
+    uint256 public constant oracleBondPercentage = 0.001e18; // Proposal bond set to 0.1% of claimed insurance coverage.
 
     uint256 public constant optimisticOracleLivenessTime = 3600 * 24; // Optimistic oracle liveness set to 24h.
 
