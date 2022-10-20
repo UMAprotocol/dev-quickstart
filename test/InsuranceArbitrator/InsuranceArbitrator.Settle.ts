@@ -163,4 +163,9 @@ describe("Insurance Arbitrator: Settle", function () {
     await optimisticOracle.setCurrentTime((await (await ethers.provider.getBlock("latest")).timestamp) + 1);
     await expect(insuranceArbitrator.connect(claimant).submitClaim(policyId)).not.to.be.reverted;
   });
+  it("Cannot spoof the callback", async function () {
+    await expect(
+      insuranceArbitrator.connect(insured).priceSettled(identifier, requestTime, expectedAncillaryData, YES_ANSWER)
+    ).to.be.revertedWith("Unauthorized callback");
+  });
 });
