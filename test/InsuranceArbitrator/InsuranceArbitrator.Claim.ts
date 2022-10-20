@@ -1,7 +1,7 @@
 import { ExpandedERC20Ethers, OptimisticOracleV2Ethers, StoreEthers, TimerEthers } from "@uma/contracts-node";
 import { insuranceArbitratorFixture } from "../fixtures/InsuranceArbitrator.Fixture";
 import { umaEcosystemFixture } from "../fixtures/UmaEcosystem.Fixture";
-import { anyValue, BigNumber, expect, ethers, SignerWithAddress, toWei } from "../utils";
+import { anyValue, BigNumber, expect, ethers, SignerWithAddress, toWei, randomBytes32 } from "../utils";
 import { InsuranceArbitrator } from "../../typechain";
 import { identifier, insuredAmount, insuredEvent, yesPrice } from "./constants";
 import { constructAncillaryData, getClaimIdFromTx, getExpirationTime, getPolicyIdFromTx } from "./utils";
@@ -75,5 +75,11 @@ describe("Insurance Arbitrator: Claim", function () {
     expect(request.proposedPrice).to.equal(yesPrice);
     expect(request.expirationTime).to.equal(expectedExpirationTime);
     expect(request.requestSettings.callbackOnPriceSettled).to.equal(true);
+  });
+  it("Check for valid insurance policy", async function () {
+    const invalidPolicyId = randomBytes32();
+    await expect(insuranceArbitrator.connect(claimant).submitClaim(invalidPolicyId)).to.be.revertedWith(
+      "Insurance not issued"
+    );
   });
 });

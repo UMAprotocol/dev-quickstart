@@ -78,4 +78,6 @@ export const utf8ToHex = (input: string) => ethers.utils.formatBytes32String(inp
 
 export const utf8ToHexString = (input: string) => ethers.utils.hexlify(ethers.utils.toUtf8Bytes(input));
 
+export const randomBytes32 = () => ethers.utils.hexlify(ethers.utils.randomBytes(32));
+
 export { anyValue, expect, Contract, ethers, hre, BigNumber, Signer };
