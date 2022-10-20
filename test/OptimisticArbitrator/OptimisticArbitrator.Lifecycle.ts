@@ -26,7 +26,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     liveness = 3600; // 1 hour
 
     ancillaryData = ethers.utils.toUtf8Bytes(
-      `q The price of BTC was above 18000 USD for the duration of October 10 2022 UTC time considering top 5 volume weighted markets`
+      `q: The price of BTC was above 18000 USD for the duration of October 10 2022 UTC time considering top 5 volume weighted markets`
     );
 
     // Set the final fee in the store
