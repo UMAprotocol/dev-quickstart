@@ -147,7 +147,7 @@ contract OptimisticArbitrator {
         );
     }
 
-    // Pulls and amount of collateral tokens from sender and approves the Optimistic Oracle to spend them.
+    // Pulls amount of collateral tokens from sender and approves the Optimistic Oracle to spend them.
     function _pullAndApprove(uint256 amount) private {
         currency.safeTransferFrom(msg.sender, address(this), amount);
         currency.approve(address(oo), amount);
