@@ -23,7 +23,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
 
     liveness = 3600; // 1 hour
     ancillaryData = ethers.utils.toUtf8Bytes(
-      `q: title: Will the price of BTC be $18000.00 or more on October 10, 2022?, description: More info. res_data: p1: 0, p2: 1, p3: 0.5, p4: -57896044618658097711785492504343953926634992332820282019728.792003956564819968. Where p1 corresponds to No, p2 to a Yes, p3 to unknown/tie, and p4 to an early request`
+      `assertion: The price of BTC was above $18000 for the duration of October 10, 2022, UTC time, considering top 5 volume weighted markets. res_data: p1: 0, p2: 1. Where p1 corresponds to False, p2 to True`
     );
 
     // Set the final fee in the store

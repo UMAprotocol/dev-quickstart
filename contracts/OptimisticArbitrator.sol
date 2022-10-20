@@ -15,10 +15,10 @@ import "@uma/core/contracts/oracle/implementation/Constants.sol";
  * @notice This contract enables assertions to be made to the Optimistic Oracle and assertions to be ratified by the UMA
  *  Data Verification Mechanism. An assertion consists of using the requestPrice and proposePrice methods of the OptimisticOracle to
  *  confirm or deny the response to a question. To ratify an assertion, an initial assertion must be made and disputed, such that the
- *  question is scaled to the DVM, where UMA token holders vote on it.
+ *  question is escalated to the DVM, where UMA token holders vote on it.
  * @dev This contract is stateless and solely encapsulates the DVM's functionality to leverage the Optimistic Arbitrator pattern.
  * @dev The Optimistic Oracle's functions are called on behalf of the caller, hence this contract will neither hold nor receive funds
- *  from these actions.
+ *  from these actions. The Optimistic Oracle in this design is used to handle all bond payouts based on the outcome of the DVM vote.
  */
 contract OptimisticArbitrator {
     using SafeERC20 for IERC20;
@@ -48,7 +48,7 @@ contract OptimisticArbitrator {
      *  and not the Optimist Arbitrator, will hold or receive funds.
      * @param timestamp timestamp of the price being requested.
      * @param ancillaryData ancillary data representing additional args being passed with the price request.
-     * @param proposedPrice price being proposed.
+     * @param assertedPrice price being proposed.
      * @param reward reward offered to a successful proposer. Note: this can be 0, which could make sense if the caller
      * expects to not being disputed.
      * @param bond custom proposal bond to set for request. If set to 0, defaults to the final fee.
@@ -57,13 +57,13 @@ contract OptimisticArbitrator {
     function makeAssertion(
         uint256 timestamp,
         bytes memory ancillaryData,
-        int256 proposedPrice,
+        int256 assertedPrice,
         uint256 reward,
         uint256 bond,
         uint64 liveness
     ) public {
         _pullAndApprove(reward + bond + _getStore().computeFinalFee(address(currency)).rawValue);
-        _makeAssertion(timestamp, ancillaryData, proposedPrice, reward, bond, liveness);
+        _makeAssertion(timestamp, ancillaryData, assertedPrice, reward, bond, liveness);
     }
 
     /**
@@ -98,10 +98,10 @@ contract OptimisticArbitrator {
     function assertAndRatify(
         uint256 timestamp,
         bytes memory ancillaryData,
-        int256 proposedPrice
+        int256 assertedPrice
     ) public {
         _pullAndApprove(2 * _getStore().computeFinalFee(address(currency)).rawValue);
-        _makeAssertion(timestamp, ancillaryData, proposedPrice, 0, 0, 0);
+        _makeAssertion(timestamp, ancillaryData, assertedPrice, 0, 0, 0);
         oo.disputePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData);
     }
 
@@ -129,7 +129,7 @@ contract OptimisticArbitrator {
     function _makeAssertion(
         uint256 timestamp,
         bytes memory ancillaryData,
-        int256 proposedPrice,
+        int256 assertedPrice,
         uint256 reward,
         uint256 bond,
         uint64 liveness
@@ -143,7 +143,7 @@ contract OptimisticArbitrator {
             priceIdentifier,
             timestamp,
             ancillaryData,
-            proposedPrice
+            assertedPrice
         );
     }
 
