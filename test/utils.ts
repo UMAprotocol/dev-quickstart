@@ -76,4 +76,6 @@ export const parseUnits = (num: string | number | BigNumber, dec: string | numbe
 
 export const utf8ToHex = (input: string) => ethers.utils.formatBytes32String(input);
 
+export const utf8ToHexString = (input: string) => ethers.utils.hexlify(ethers.utils.toUtf8Bytes(input));
+
 export { anyValue, expect, Contract, ethers, hre, BigNumber, Signer };
