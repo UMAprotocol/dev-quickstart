@@ -51,7 +51,7 @@ contract OptimisticArbitrator {
      * @param assertedPrice price being proposed.
      * @param reward reward offered to a successful proposer. Note: this can be 0, which could make sense if the caller
      * expects to not being disputed.
-     * @param bond custom proposal bond to set for request. If set to 0, the bond collected from the caller equals the finalFee.
+     * @param bond custom proposal bond to set for request. If set to 0, the bond pulled from the caller equals the finalFee.
      * @param liveness custom proposal liveness to set for request, if set to 0, defaults to the default liveness value.
      */
     function makeAssertion(
