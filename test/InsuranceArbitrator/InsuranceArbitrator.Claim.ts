@@ -93,4 +93,26 @@ describe("Insurance Arbitrator: Claim", function () {
       "Claim already initiated"
     );
   });
+  it("Cannot claim similar policies at the same time", async function () {
+    // Issue new insurance with replicated parameters and grab its policyId.
+    await usdc.connect(deployer).mint(insurer.address, insuredAmount);
+    await usdc.connect(insurer).approve(insuranceArbitrator.address, insuredAmount);
+    const duplicateInsuranceTx = insuranceArbitrator
+      .connect(insurer)
+      .issueInsurance(insuredEvent, insured.address, insuredAmount);
+    const duplicatePolicyId = await getPolicyIdFromTx(insuranceArbitrator, duplicateInsuranceTx);
+
+    // Double bond funding for the claimant.
+    await usdc.connect(deployer).mint(claimant.address, expectedBond);
+    await usdc.connect(claimant).approve(insuranceArbitrator.address, expectedBond.mul(2));
+
+    // The second policy claim should fail due to price request conflict at Optimistic Oracle.
+    // This test relies on current time of Testable Optimistic Oracle not being advanced.
+    await expect(insuranceArbitrator.connect(claimant).submitClaim(policyId)).not.to.be.reverted;
+    await expect(insuranceArbitrator.connect(claimant).submitClaim(duplicatePolicyId)).to.be.reverted;
+
+    // Confirm that claim on second policy gets unblocked after time has advanced.
+    await optimisticOracle.setCurrentTime((await (await ethers.provider.getBlock("latest")).timestamp) + 1);
+    await expect(insuranceArbitrator.connect(claimant).submitClaim(duplicatePolicyId)).not.to.be.reverted;
+  });
 });
