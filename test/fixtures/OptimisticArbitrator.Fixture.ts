@@ -35,6 +35,7 @@ export async function deployOptimisticArbitrator(ethers: typeof hre.ethers) {
 
   const optimisticArbitrator = await optimisticArbitratorFactory.deploy(
     parentFixture.finder.address,
+    usdc.address,
     parentFixture.timer.address
   );
 
