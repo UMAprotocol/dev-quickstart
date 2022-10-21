@@ -47,7 +47,7 @@ contract OptimisticArbitrator {
      * @dev The Optimistic Oracle price proposal is submitted on behalf of the caller, therefore only the caller,
      *  and not the Optimist Arbitrator, will hold or receive funds.
      * @param timestamp timestamp of the assertion
-     * @param ancillaryData ancillary data representing additional args being passed with the price request.
+     * @param ancillaryData ancillary data representing additional args being passed with the assertion.
      * @param assertedPrice price being proposed.
      * @param reward reward offered to a successful proposer. Note: this can be 0, which could make sense if the caller
      * expects to not being disputed.
