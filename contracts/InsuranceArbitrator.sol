@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
+import "@uma/core/contracts/common/implementation/Testable.sol";
 import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
 import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
 
@@ -18,7 +19,7 @@ import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
  * automatically pays out insurance coverage to the insured beneficiary. If the claim is rejected policy continues to be
  * active ready for the subsequent claim attempts.
  */
-contract InsuranceArbitrator {
+contract InsuranceArbitrator is Testable {
     using SafeERC20 for IERC20;
 
     /******************************************
@@ -77,11 +78,16 @@ contract InsuranceArbitrator {
 
     /**
      * @notice Construct the InsuranceArbitrator
-     * @param _finderAddress DVM finder to find other UMA ecosystem contracts.
+     * @param _finder DVM finder to find other UMA ecosystem contracts.
      * @param _currency denomination token for insurance coverage and bonding.
+     * @param _timer to enable simple time manipulation on this contract to simplify testing.
      */
-    constructor(address _finderAddress, address _currency) {
-        finder = FinderInterface(_finderAddress);
+    constructor(
+        FinderInterface _finder,
+        address _currency,
+        address _timer
+    ) Testable(_timer) {
+        finder = _finder;
         currency = IERC20(_currency);
         oo = OptimisticOracleV2Interface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracleV2));
     }
@@ -133,7 +139,7 @@ contract InsuranceArbitrator {
         require(!claimedPolicy.claimInitiated, "Claim already initiated");
 
         claimedPolicy.claimInitiated = true;
-        uint256 timestamp = block.timestamp;
+        uint256 timestamp = getCurrentTime();
         bytes memory ancillaryData = abi.encodePacked(ancillaryDataHead, claimedPolicy.insuredEvent, ancillaryDataTail);
         bytes32 claimId = _getClaimId(timestamp, ancillaryData);
         insuranceClaims[claimId] = policyId;

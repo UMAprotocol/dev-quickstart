@@ -13,8 +13,8 @@ const func = async function (hre: HardhatRuntimeEnvironment) {
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
   const Finder = await getAddress("Finder", chainId);
-  
-  // Note: The Goerli WETH address is hardcoded as the collateral address. Feel free to change 
+
+  // Note: The Goerli WETH address is hardcoded as the collateral address. Feel free to change
   // if using a different collateral type or deploying to a different network.
   await deploy("OptimisticDepositBox", {
     from: deployer,

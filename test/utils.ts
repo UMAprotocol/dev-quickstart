@@ -6,6 +6,7 @@ import hre from "hardhat";
 import { ethers } from "hardhat";
 import { BigNumber, Signer, Contract, ContractFactory } from "ethers";
 import { FactoryOptions } from "hardhat/types";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 
 export interface SignerWithAddress extends Signer {
   address: string;
@@ -70,6 +71,13 @@ export function getAllFilesInPath(dirPath: string, arrayOfFiles: string[] = []):
 
 export const toWei = (num: string | number | BigNumber) => ethers.utils.parseEther(num.toString());
 
+export const parseUnits = (num: string | number | BigNumber, dec: string | number | BigNumber) =>
+  ethers.utils.parseUnits(num.toString(), dec.toString());
+
 export const utf8ToHex = (input: string) => ethers.utils.formatBytes32String(input);
 
-export { expect, Contract, ethers, hre, BigNumber, Signer };
+export const utf8ToHexString = (input: string) => ethers.utils.hexlify(ethers.utils.toUtf8Bytes(input));
+
+export const randomBytes32 = () => ethers.utils.hexlify(ethers.utils.randomBytes(32));
+
+export { anyValue, expect, Contract, ethers, hre, BigNumber, Signer };

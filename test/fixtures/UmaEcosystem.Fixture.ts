@@ -1,17 +1,19 @@
 import { getContractFactory, utf8ToHex, hre } from "../utils";
 import { proposalLiveness, zeroRawValue, identifier } from "../constants";
 import { interfaceName } from "@uma/common";
-import { OptimisticOracleV2Ethers, MockOracleAncillaryEthers } from "@uma/contracts-node";
+import { OptimisticOracleV2Ethers, MockOracleAncillaryEthers, StoreEthers, TimerEthers } from "@uma/contracts-node";
 
 export const umaEcosystemFixture = hre.deployments.createFixture(async ({ ethers }) => {
   const [deployer] = await ethers.getSigners();
 
   // Deploy the UMA ecosystem contracts.
-  const timer = await (await getContractFactory("Timer", deployer)).deploy();
+  const timer = (await (await getContractFactory("Timer", deployer)).deploy()) as TimerEthers;
   const finder = await (await getContractFactory("Finder", deployer)).deploy();
   const collateralWhitelist = await (await getContractFactory("AddressWhitelist", deployer)).deploy();
   const identifierWhitelist = await (await getContractFactory("IdentifierWhitelist", deployer)).deploy();
-  const store = await (await getContractFactory("Store", deployer)).deploy(zeroRawValue, zeroRawValue, timer.address);
+  const store = (await (
+    await getContractFactory("Store", deployer)
+  ).deploy(zeroRawValue, zeroRawValue, timer.address)) as StoreEthers;
   const mockOracle = (await (
     await getContractFactory("MockOracleAncillary", deployer)
   ).deploy(finder.address, timer.address)) as MockOracleAncillaryEthers;
