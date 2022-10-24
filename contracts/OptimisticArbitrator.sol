@@ -134,6 +134,7 @@ contract OptimisticArbitrator is Testable {
         Request storage request = requests[requestId];
         require(address(request.currency) != address(0), "Price not requested");
         require(request.proposer != address(0), "No proposed price to settle");
+        require(!request.settled, "Price already settled");
 
         if (request.disputer != address(0)) {
             require(
