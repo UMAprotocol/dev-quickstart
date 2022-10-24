@@ -78,15 +78,16 @@ contract InsuranceArbitrator is Testable {
 
     /**
      * @notice Construct the InsuranceArbitrator
-     * @param _finderAddress DVM finder to find other UMA ecosystem contracts.
+     * @param _finder DVM finder to find other UMA ecosystem contracts.
      * @param _currency denomination token for insurance coverage and bonding.
+     * @param _timer to enable simple time manipulation on this contract to simplify testing.
      */
     constructor(
-        address _finderAddress,
+        FinderInterface _finder,
         address _currency,
-        address _timerAddress
-    ) Testable(_timerAddress) {
-        finder = FinderInterface(_finderAddress);
+        address _timer
+    ) Testable(_timer) {
+        finder = _finder;
         currency = IERC20(_currency);
         oo = OptimisticOracleV2Interface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracleV2));
     }
