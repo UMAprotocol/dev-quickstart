@@ -13,7 +13,7 @@ import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
 import "@uma/core/contracts/common/implementation/Testable.sol";
 
-contract OptimisticArbitrator is Testable {
+contract InternalOptimisticOracle is Testable {
     using SafeERC20 for IERC20;
 
     struct Request {
@@ -21,7 +21,7 @@ contract OptimisticArbitrator is Testable {
         address disputer; // Address of the disputer.
         IERC20 currency; // ERC20 token used to pay rewards and fees.
         bool settled; // True if the request is settled.
-        uint256[4] proposedPrice; // Price that the proposer submitted.
+        uint256 proposedPrice; // Price that the proposer submitted.
         uint256 reward; // Amount of the currency to pay to the proposer on settlement.
         uint256 finalFee; // Final fee to pay to the Store upon request to the DVM.
         uint256 bond; // Bond that the proposer and disputer must pay on top of the final fee.
@@ -67,7 +67,7 @@ contract OptimisticArbitrator is Testable {
             disputer: address(0),
             currency: currency,
             settled: false,
-            proposedPrice: [uint256(0), uint256(0), uint256(0), uint256(0)],
+            proposedPrice: 0,
             reward: reward,
             finalFee: _getFinalFee(),
             bond: bond,
@@ -81,7 +81,7 @@ contract OptimisticArbitrator is Testable {
     function proposePrice(
         uint256 timestamp,
         bytes memory ancillaryData,
-        uint256[4] memory proposedPrice
+        uint256 proposedPrice
     ) public {
         Request storage request = requests[_getId(msg.sender, timestamp, ancillaryData)];
         require(address(request.currency) != address(0), "Price not requested");
@@ -129,7 +129,7 @@ contract OptimisticArbitrator is Testable {
         if (balanceToRefund > 0) request.currency.safeTransfer(msg.sender, balanceToRefund);
     }
 
-    function settleAndGetPrice(uint256 timestamp, bytes memory ancillaryData) public returns (uint256[4] memory) {
+    function settleAndGetPrice(uint256 timestamp, bytes memory ancillaryData) public returns (uint256) {
         bytes32 requestId = _getId(msg.sender, timestamp, ancillaryData);
         Request storage request = requests[requestId];
         require(address(request.currency) != address(0), "Price not requested");
@@ -151,7 +151,7 @@ contract OptimisticArbitrator is Testable {
         return request.proposedPrice;
     }
 
-    function getPrice(uint256 timestamp, bytes memory ancillaryData) public view returns (uint256[4] memory) {
+    function getPrice(uint256 timestamp, bytes memory ancillaryData) public view returns (uint256) {
         Request storage request = requests[_getId(msg.sender, timestamp, ancillaryData)];
         require(request.settled == true, "Request not settled");
         return request.proposedPrice;
