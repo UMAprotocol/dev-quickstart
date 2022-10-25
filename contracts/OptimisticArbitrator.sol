@@ -34,7 +34,7 @@ contract OptimisticArbitrator {
     /**
      * @notice Constructor.
      * @param _finderAddress finder to use to get addresses of DVM contracts.
-     * @param _currency collateral token used to pay rewards and fees.
+     * @param _currency collateral token used to pay fees.
      */
     constructor(address _finderAddress, address _currency) {
         finder = FinderInterface(_finderAddress);
@@ -48,8 +48,7 @@ contract OptimisticArbitrator {
      *  and not the Optimist Arbitrator, will hold or receive funds.
      * @param timestamp timestamp of the assertion
      * @param ancillaryData ancillary data representing additional args being passed with the assertion.
-     * @param assertedPrice price being proposed.
-     * @param reward reward offered to a successful proposer. Note: this can be 0, which could make sense if the caller
+     * @param assertedValue value being proposed.
      * expects to not being disputed.
      * @param bond custom proposal bond to set for request. If set to 0, the bond pulled from the caller equals the finalFee.
      * @param liveness custom proposal liveness to set for request, if set to 0, defaults to the default liveness value.
@@ -57,13 +56,12 @@ contract OptimisticArbitrator {
     function makeAssertion(
         uint256 timestamp,
         bytes memory ancillaryData,
-        int256 assertedPrice,
-        uint256 reward,
+        int256 assertedValue,
         uint256 bond,
         uint64 liveness
     ) public {
-        _pullAndApprove(reward + bond + _getStore().computeFinalFee(address(currency)).rawValue);
-        _makeAssertion(timestamp, ancillaryData, assertedPrice, reward, bond, liveness);
+        _pullAndApprove(bond + _getStore().computeFinalFee(address(currency)).rawValue);
+        _makeAssertion(timestamp, ancillaryData, assertedValue, bond, liveness);
     }
 
     /**
@@ -98,10 +96,10 @@ contract OptimisticArbitrator {
     function assertAndRatify(
         uint256 timestamp,
         bytes memory ancillaryData,
-        int256 assertedPrice
+        int256 assertedValue
     ) public {
         _pullAndApprove(2 * _getStore().computeFinalFee(address(currency)).rawValue);
-        _makeAssertion(timestamp, ancillaryData, assertedPrice, 0, 0, 0);
+        _makeAssertion(timestamp, ancillaryData, assertedValue, 0, 0);
         oo.disputePriceFor(msg.sender, address(this), priceIdentifier, timestamp, ancillaryData);
     }
 
@@ -129,12 +127,11 @@ contract OptimisticArbitrator {
     function _makeAssertion(
         uint256 timestamp,
         bytes memory ancillaryData,
-        int256 assertedPrice,
-        uint256 reward,
+        int256 assertedValue,
         uint256 bond,
         uint64 liveness
     ) private {
-        oo.requestPrice(priceIdentifier, timestamp, ancillaryData, currency, reward);
+        oo.requestPrice(priceIdentifier, timestamp, ancillaryData, currency, 0);
         oo.setBond(priceIdentifier, timestamp, ancillaryData, bond);
         if (liveness > 0) oo.setCustomLiveness(priceIdentifier, timestamp, ancillaryData, liveness);
         oo.proposePriceFor(
@@ -143,7 +140,7 @@ contract OptimisticArbitrator {
             priceIdentifier,
             timestamp,
             ancillaryData,
-            assertedPrice
+            assertedValue
         );
     }
 

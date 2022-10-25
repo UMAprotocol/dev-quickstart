@@ -47,7 +47,6 @@ describe("OptimisticArbitrator: Lifecycle", function () {
       requestTimestamp,
       ancillaryData,
       YES_ANSWER,
-      ethers.utils.parseUnits("20", await usdc.decimals()),
       ethers.utils.parseUnits("500", await usdc.decimals()),
       liveness
     );
@@ -73,14 +72,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
 
     const bond = ethers.utils.parseUnits("500", await usdc.decimals());
 
-    await optimisticArbitrator.makeAssertion(
-      requestTimestamp,
-      ancillaryData,
-      YES_ANSWER,
-      ethers.utils.parseUnits("20", await usdc.decimals()),
-      bond,
-      liveness
-    );
+    await optimisticArbitrator.makeAssertion(requestTimestamp, ancillaryData, YES_ANSWER, bond, liveness);
 
     await optimisticArbitrator.ratifyAssertion(requestTimestamp, ancillaryData);
 
