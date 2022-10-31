@@ -13,6 +13,14 @@ import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
 import "@uma/core/contracts/oracle/implementation/Constants.sol";
 import "@uma/core/contracts/common/implementation/Testable.sol";
 
+/**
+ * @title Internal Optimistic Oracle
+ * @notice This contract implements the Optimistic Oracle's (OO) internal escalation game logic for price requests and price proposals
+ * locally. The disputes are escalated through the canonical Optimistic Oracle to the UMA's Data Verification Mechanism. The Internal
+ * Optimistic Oracle (IOO) contract is meant to be utilised as a type of OO that permits customized escalation game logic and
+ * custom price data structures. This IOO is intended to be the simplest implementation possible, allowing it to serve as a starting
+ * point for any project that can benefit from these functionalities.
+ */
 contract InternalOptimisticOracle is Testable {
     using SafeERC20 for IERC20;
 
@@ -37,6 +45,14 @@ contract InternalOptimisticOracle is Testable {
 
     bytes32 public constant priceIdentifier = "YES_OR_NO_QUERY";
 
+    mapping(bytes32 => Request) public requests;
+
+    /**
+     * @notice Constructor.
+     * @param _finderAddress finder to use to get addresses of DVM contracts.
+     * @param _currency collateral token used to pay fees.
+     * @param _timerAddress address of the timer contract. Only for testing, should be 0x0 in prod.
+     */
     constructor(
         address _finderAddress,
         address _currency,
@@ -47,8 +63,15 @@ contract InternalOptimisticOracle is Testable {
         oo = OptimisticOracleV2Interface(finder.getImplementationAddress(OracleInterfaces.OptimisticOracleV2));
     }
 
-    mapping(bytes32 => Request) public requests;
-
+    /**
+     * @notice Requests a price from the Internal Optimistic Oracle.
+     * @param timestamp timestamp of the price being requested.
+     * @param ancillaryData ancillary data of the price being requested.
+     * @param reward reward offered to a successful proposer. Will be pulled from the caller. Note: this can be 0, which could
+     * make sense if the contract requests and proposes the value in the same call or provides its own reward system.
+     * @param bond custom proposal bond to set for request. If set to 0, defaults to the final fee.
+     * @param liveness custom proposal liveness to set for request.
+     */
     function requestPrice(
         uint256 timestamp,
         bytes memory ancillaryData,
@@ -78,6 +101,12 @@ contract InternalOptimisticOracle is Testable {
         if (reward > 0) currency.safeTransferFrom(msg.sender, address(this), reward);
     }
 
+    /**
+     * @notice Proposes a price value on a requested price.
+     * @param timestamp timestamp of the price being requested.
+     * @param ancillaryData ancillary data of the price being requested.
+     * @param proposedPrice price being proposed.
+     */
     function proposePrice(
         uint256 timestamp,
         bytes memory ancillaryData,
@@ -91,9 +120,17 @@ contract InternalOptimisticOracle is Testable {
         request.proposedPrice = proposedPrice;
         request.expirationTime = uint64(getCurrentTime()) + request.liveness;
 
+        // If the final fee gets updated between the time the request is made and the time the propose is made, update it
+        _updateFinalFee(request);
+
         request.currency.safeTransferFrom(msg.sender, address(this), request.bond + request.finalFee);
     }
 
+    /**
+     * @notice Disputes a price value on a requested price.
+     * @param timestamp timestamp of the price being requested.
+     * @param ancillaryData ancillary data of the price being requested.
+     */
     function disputePrice(uint256 timestamp, bytes memory ancillaryData) public {
         bytes32 requestId = _getId(msg.sender, timestamp, ancillaryData);
         Request storage request = requests[requestId];
@@ -103,18 +140,21 @@ contract InternalOptimisticOracle is Testable {
 
         request.disputer = msg.sender;
 
-        // If the final fee gets updated between the time the request is made and the time the dispute is made, the
+        // If the final fee gets increased between the time the request is made and the time the dispute is made, the
         // disputer will have to pay the final fee increase x2. This is a very rare edge case that we are willing to accept.
-        uint256 finalFeeRise = _getFinalFeeRise(request);
-        uint256 initialBalance = request.currency.balanceOf(address(this));
+        int256 finalFeeDifference = _updateFinalFee(request);
+        uint256 finalFeeIncrease = finalFeeDifference > 0 ? uint256(finalFeeDifference) : 0;
 
         request.currency.safeTransferFrom(
             msg.sender,
             address(this),
-            request.bond + request.finalFee + 2 * finalFeeRise
+            request.bond + request.finalFee + finalFeeIncrease
         );
 
-        request.currency.approve(address(oo), 2 * (request.bond + request.finalFee + finalFeeRise) + request.reward);
+        request.currency.approve(
+            address(oo),
+            2 * (request.bond + request.finalFee) + finalFeeIncrease + request.reward
+        );
 
         bytes memory disputeAncillaryData = _getDisputeAncillaryData(requestId);
         oo.requestPrice(priceIdentifier, timestamp, disputeAncillaryData, request.currency, request.reward);
@@ -122,13 +162,15 @@ contract InternalOptimisticOracle is Testable {
         oo.proposePriceFor(request.proposer, address(this), priceIdentifier, timestamp, disputeAncillaryData, 1e18);
         oo.disputePriceFor(msg.sender, address(this), priceIdentifier, timestamp, disputeAncillaryData);
 
-        // If the final fee has decreased, refund the excess to the disputer & proposer.
-        uint256 balanceToRefund = request.currency.balanceOf(address(this)) > initialBalance
-            ? request.currency.balanceOf(address(this)) - initialBalance
-            : 0;
-        if (balanceToRefund > 0) request.currency.safeTransfer(msg.sender, balanceToRefund);
+        // If the final fee has decreased, refund the excess to the proposer.
+        if (finalFeeDifference < 0) request.currency.safeTransfer(request.proposer, uint256(-finalFeeDifference));
     }
 
+    /**
+     * @notice Settles a price value on a requested price. Will revert if the price is not resolved.
+     * @param timestamp timestamp of the price being requested.
+     * @param ancillaryData ancillary data of the price being requested.
+     */
     function settleAndGetPrice(uint256 timestamp, bytes memory ancillaryData) public returns (uint256) {
         bytes32 requestId = _getId(msg.sender, timestamp, ancillaryData);
         Request storage request = requests[requestId];
@@ -151,6 +193,11 @@ contract InternalOptimisticOracle is Testable {
         return request.proposedPrice;
     }
 
+    /**
+     * @notice Returns the price proposed for a given request, or reverts if the price is not available.
+     * @param timestamp timestamp of the price being requested.
+     * @param ancillaryData ancillary data of the price being requested.
+     */
     function getPrice(uint256 timestamp, bytes memory ancillaryData) public view returns (uint256) {
         Request storage request = requests[_getId(msg.sender, timestamp, ancillaryData)];
         require(request.settled == true, "Request not settled");
@@ -170,9 +217,12 @@ contract InternalOptimisticOracle is Testable {
             );
     }
 
-    function _getFinalFeeRise(Request memory request) internal view returns (uint256) {
+    function _updateFinalFee(Request storage request) internal returns (int256 difference) {
         uint256 newFinalFee = _getFinalFee();
-        return request.finalFee < newFinalFee ? newFinalFee - request.finalFee : 0;
+        difference = int256(newFinalFee) - int256(request.finalFee);
+        if (difference != 0) {
+            request.finalFee = newFinalFee;
+        }
     }
 
     function _getId(

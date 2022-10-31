@@ -30,7 +30,7 @@ describe("OptimisticArbitrator: Lifecycle", function () {
     );
 
     // Set the final fee in the store
-    store.setFinalFee(usdc.address, { rawValue: ethers.utils.parseUnits("1500", await usdc.decimals()) });
+    await store.setFinalFee(usdc.address, { rawValue: ethers.utils.parseUnits("1500", await usdc.decimals()) });
 
     // Mint some fresh tokens for the deployer.
     await seedAndApprove([deployer], usdc, amountToSeedWallets, optimisticArbitrator.address);

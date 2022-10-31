@@ -11,7 +11,7 @@ import hre from "hardhat";
 
 let internalOptimisticOracle: InternalOptimisticOracle, usdc: ExpandedERC20Ethers;
 let optimisticOracle: OptimisticOracleV2Ethers, store: StoreEthers, mockOracle: MockOracleAncillaryEthers;
-let requester: SignerWithAddress, proposer: SignerWithAddress, disputer: SignerWithAddress;
+let requester: SignerWithAddress;
 let ancillaryData: Uint8Array, liveness: number;
 let wrongAnswer: BigNumber;
 let correctAnswer: BigNumber;
@@ -19,24 +19,22 @@ let correctAnswer: BigNumber;
 describe("InternalOptimisticOracle: Lifecycle", function () {
   beforeEach(async function () {
     // Load accounts and run fixtures to set up tests.
-    [requester, proposer, disputer] = await ethers.getSigners();
+    [requester] = await ethers.getSigners();
     ({ optimisticOracle, mockOracle, store } = await umaEcosystemFixture());
     ({ internalOptimisticOracle, usdc } = await internalOptimisticOracleFixture());
 
     const amountToSeedWallets = hre.ethers.utils.parseUnits("100000", await usdc.decimals()); // 10000 USDC
 
-    ancillaryData = ethers.utils.toUtf8Bytes(`q: "What is the list of 4 uint we are looking for?"`);
+    ancillaryData = ethers.utils.toUtf8Bytes(`q: "What uint256 are we looking for?"`);
     liveness = 3600; // 1 hour
     wrongAnswer = BigNumber.from(1);
     correctAnswer = BigNumber.from(2);
 
     // Set the final fee in the store
-    store.setFinalFee(usdc.address, { rawValue: hre.ethers.utils.parseUnits("1500", await usdc.decimals()) });
+    await store.setFinalFee(usdc.address, { rawValue: hre.ethers.utils.parseUnits("1500", await usdc.decimals()) });
 
-    // Mint some fresh tokens for the requester, requester and disputer.
-    await seedAndApprove([requester, disputer], usdc, amountToSeedWallets, internalOptimisticOracle.address);
-    // Approve the Optimistic Oracle to spend bond tokens from the disputer and requester.
-    await seedAndApprove([disputer, requester], usdc, amountToSeedWallets, optimisticOracle.address);
+    // Mint some fresh tokens for the requester
+    await seedAndApprove([requester], usdc, amountToSeedWallets, internalOptimisticOracle.address);
   });
 
   it("Proposed price with no dispute", async function () {
@@ -81,7 +79,7 @@ describe("InternalOptimisticOracle: Lifecycle", function () {
     );
 
     // Proposer proposes an answer.
-    await internalOptimisticOracle.proposePrice(requestTimestamp, ancillaryData, wrongAnswer);
+    await internalOptimisticOracle.proposePrice(requestTimestamp, ancillaryData, correctAnswer);
 
     // Disputer disputes the proposal
     await internalOptimisticOracle.disputePrice(requestTimestamp, ancillaryData);
@@ -92,7 +90,7 @@ describe("InternalOptimisticOracle: Lifecycle", function () {
       disputedPriceRequest.args.identifier,
       disputedPriceRequest.args.time,
       disputedPriceRequest.args.ancillaryData,
-      ethers.utils.parseEther("1")
+      ethers.utils.parseEther("1") // Yes answer
     );
     const receipt = await tx.wait();
 
@@ -112,5 +110,7 @@ describe("InternalOptimisticOracle: Lifecycle", function () {
     expect(finalCost).to.equal(balanceBefore.sub(await usdc.balanceOf(requester.address)));
 
     expect(finalCost).to.equal(await usdc.balanceOf(store.address));
+
+    expect(await internalOptimisticOracle.getPrice(requestTimestamp, ancillaryData)).to.deep.equal(correctAnswer);
   });
 });
