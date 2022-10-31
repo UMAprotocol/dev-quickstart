@@ -66,6 +66,8 @@ describe("InternalOptimisticOracle: Edgecases", function () {
     await internalOptimisticOracle.settleAndGetPrice(requestTimestamp, ancillaryData);
 
     expect(await internalOptimisticOracle.getPrice(requestTimestamp, ancillaryData)).to.deep.equal(correctAnswer);
+
+    expect(await usdc.balanceOf(internalOptimisticOracle.address)).to.deep.equal(BigNumber.from(0));
   });
 
   it("Dispute with final fee increased between propose and dispute", async function () {
@@ -161,9 +163,9 @@ describe("InternalOptimisticOracle: Edgecases", function () {
 
     const finalCost = storeFinalFee.rawValue.add(customBond.div(2));
 
-    // expect(finalCost).to.equal(balanceBefore.sub(await usdc.balanceOf(requester.address)));
+    expect(finalCost).to.equal(balanceBefore.sub(await usdc.balanceOf(requester.address)));
 
-    // expect(finalCost).to.equal(await usdc.balanceOf(store.address));
+    expect(finalCost).to.equal(await usdc.balanceOf(store.address));
 
     expect(await internalOptimisticOracle.getPrice(requestTimestamp, ancillaryData)).to.deep.equal(correctAnswer);
 

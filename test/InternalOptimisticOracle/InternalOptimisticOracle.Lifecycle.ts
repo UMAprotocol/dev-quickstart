@@ -61,6 +61,8 @@ describe("InternalOptimisticOracle: Lifecycle", function () {
     await internalOptimisticOracle.settleAndGetPrice(requestTimestamp, ancillaryData);
 
     expect(await internalOptimisticOracle.getPrice(requestTimestamp, ancillaryData)).to.deep.equal(correctAnswer);
+
+    expect(await usdc.balanceOf(internalOptimisticOracle.address)).to.deep.equal(BigNumber.from(0));
   });
 
   it("Dispute with dvm arbitration", async function () {
@@ -112,5 +114,7 @@ describe("InternalOptimisticOracle: Lifecycle", function () {
     expect(finalCost).to.equal(await usdc.balanceOf(store.address));
 
     expect(await internalOptimisticOracle.getPrice(requestTimestamp, ancillaryData)).to.deep.equal(correctAnswer);
+
+    expect(await usdc.balanceOf(internalOptimisticOracle.address)).to.deep.equal(BigNumber.from(0));
   });
 });
