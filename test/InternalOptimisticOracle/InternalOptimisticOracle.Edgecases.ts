@@ -12,11 +12,10 @@ import hre from "hardhat";
 let internalOptimisticOracle: InternalOptimisticOracle, usdc: ExpandedERC20Ethers;
 let optimisticOracle: OptimisticOracleV2Ethers, store: StoreEthers, mockOracle: MockOracleAncillaryEthers;
 let requester: SignerWithAddress;
-let ancillaryData: Uint8Array, liveness: number;
-let wrongAnswer: BigNumber;
-let correctAnswer: BigNumber;
+let ancillaryData: Uint8Array, liveness: number, bond: BigNumber, reward: BigNumber;
+let wrongAnswer: BigNumber, correctAnswer: BigNumber;
 
-describe("InternalOptimisticOracle: Lifecycle", function () {
+describe("InternalOptimisticOracle: Edgecases", function () {
   beforeEach(async function () {
     // Load accounts and run fixtures to set up tests.
     [requester] = await ethers.getSigners();
@@ -29,28 +28,34 @@ describe("InternalOptimisticOracle: Lifecycle", function () {
     liveness = 3600; // 1 hour
     wrongAnswer = BigNumber.from(1);
     correctAnswer = BigNumber.from(2);
+    bond = hre.ethers.utils.parseUnits("500", await usdc.decimals());
+    reward = hre.ethers.utils.parseUnits("200", await usdc.decimals());
 
     // Set the final fee in the store
     await store.setFinalFee(usdc.address, { rawValue: hre.ethers.utils.parseUnits("1500", await usdc.decimals()) });
 
-    // Mint some fresh tokens for the requester
+    // Mint some fresh tokens for the requester, requester and disputer.
     await seedAndApprove([requester], usdc, amountToSeedWallets, internalOptimisticOracle.address);
   });
 
-  it("Proposed price with no dispute", async function () {
+  it("Proposed price with final fee increased", async function () {
     const requestTimestamp = await internalOptimisticOracle.getCurrentTime();
 
-    await internalOptimisticOracle.requestPrice(
-      requestTimestamp,
-      ancillaryData,
-      hre.ethers.utils.parseUnits("20", await usdc.decimals()),
-      hre.ethers.utils.parseUnits("500", await usdc.decimals()),
-      liveness
-    );
+    await internalOptimisticOracle.requestPrice(requestTimestamp, ancillaryData, reward, bond, liveness);
 
+    // In the meantime the final fee is increased.
+    const newFinalFee = hre.ethers.utils.parseUnits("2000", await usdc.decimals());
+    await store.setFinalFee(usdc.address, { rawValue: newFinalFee });
+
+    const proposerBalanceBefore = await usdc.balanceOf(requester.address);
     // Proposer proposes the answer.
     const tx = await internalOptimisticOracle.proposePrice(requestTimestamp, ancillaryData, correctAnswer);
     const receipt = await tx.wait();
+
+    // Check that the proposer paid the final fee.
+    const proposerBalanceAfter = await usdc.balanceOf(requester.address);
+
+    expect(proposerBalanceAfter).to.equal(proposerBalanceBefore.sub(newFinalFee.add(bond)));
 
     const block = await ethers.provider.getBlock(receipt.blockNumber);
 
@@ -65,23 +70,21 @@ describe("InternalOptimisticOracle: Lifecycle", function () {
     expect(await usdc.balanceOf(internalOptimisticOracle.address)).to.deep.equal(BigNumber.from(0));
   });
 
-  it("Dispute with dvm arbitration", async function () {
+  it("Dispute with final fee increased between propose and dispute", async function () {
     const requestTimestamp = await internalOptimisticOracle.getCurrentTime();
 
     const balanceBefore = await usdc.balanceOf(requester.address);
 
-    const bond = hre.ethers.utils.parseUnits("0", await usdc.decimals());
+    const customBond = hre.ethers.utils.parseUnits("0", await usdc.decimals());
 
-    await internalOptimisticOracle.requestPrice(
-      requestTimestamp,
-      ancillaryData,
-      hre.ethers.utils.parseUnits("20", await usdc.decimals()),
-      bond,
-      liveness
-    );
+    await internalOptimisticOracle.requestPrice(requestTimestamp, ancillaryData, reward, customBond, liveness);
 
     // Proposer proposes an answer.
     await internalOptimisticOracle.proposePrice(requestTimestamp, ancillaryData, correctAnswer);
+
+    // In the meantime the final fee is increased.
+    const newFinalFee = hre.ethers.utils.parseUnits("2000", await usdc.decimals());
+    await store.setFinalFee(usdc.address, { rawValue: newFinalFee });
 
     // Disputer disputes the proposal
     await internalOptimisticOracle.disputePrice(requestTimestamp, ancillaryData);
@@ -107,7 +110,58 @@ describe("InternalOptimisticOracle: Lifecycle", function () {
 
     const storeFinalFee = await store.computeFinalFee(usdc.address);
 
-    const finalCost = storeFinalFee.rawValue.add(bond.div(2));
+    const finalCost = storeFinalFee.rawValue.add(customBond.div(2));
+
+    expect(finalCost).to.equal(balanceBefore.sub(await usdc.balanceOf(requester.address)));
+
+    expect(finalCost).to.equal(await usdc.balanceOf(store.address));
+
+    expect(await internalOptimisticOracle.getPrice(requestTimestamp, ancillaryData)).to.deep.equal(correctAnswer);
+
+    expect(await usdc.balanceOf(internalOptimisticOracle.address)).to.deep.equal(BigNumber.from(0));
+  });
+
+  it("Dispute with final fee decreased between propose and dispute", async function () {
+    const requestTimestamp = await internalOptimisticOracle.getCurrentTime();
+
+    const balanceBefore = await usdc.balanceOf(requester.address);
+
+    const customBond = hre.ethers.utils.parseUnits("0", await usdc.decimals());
+
+    await internalOptimisticOracle.requestPrice(requestTimestamp, ancillaryData, reward, customBond, liveness);
+
+    // Proposer proposes an answer.
+    await internalOptimisticOracle.proposePrice(requestTimestamp, ancillaryData, correctAnswer);
+
+    // In the meantime the final fee is increased.
+    const newFinalFee = hre.ethers.utils.parseUnits("500", await usdc.decimals());
+    await store.setFinalFee(usdc.address, { rawValue: newFinalFee });
+
+    // Disputer disputes the proposal
+    await internalOptimisticOracle.disputePrice(requestTimestamp, ancillaryData);
+
+    // In the meantime simulate a vote in the DVM in which the originally disputed price is accepted.
+    const disputedPriceRequest = (await mockOracle.queryFilter(mockOracle.filters.PriceRequestAdded()))[0];
+    const tx = await mockOracle.pushPrice(
+      disputedPriceRequest.args.identifier,
+      disputedPriceRequest.args.time,
+      disputedPriceRequest.args.ancillaryData,
+      ethers.utils.parseEther("1") // Yes answer
+    );
+    const receipt = await tx.wait();
+
+    // Set time after liveness
+    const block = await ethers.provider.getBlock(receipt.blockNumber);
+    await internalOptimisticOracle.setCurrentTime(
+      block.timestamp + (await optimisticOracle.defaultLiveness()).toNumber()
+    );
+
+    // Dispute is resolved by the DVM
+    await internalOptimisticOracle.settleAndGetPrice(requestTimestamp, ancillaryData);
+
+    const storeFinalFee = await store.computeFinalFee(usdc.address);
+
+    const finalCost = storeFinalFee.rawValue.add(customBond.div(2));
 
     expect(finalCost).to.equal(balanceBefore.sub(await usdc.balanceOf(requester.address)));
 
