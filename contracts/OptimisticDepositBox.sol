@@ -10,10 +10,10 @@ import "@uma/core/contracts/common/implementation/AddressWhitelist.sol";
 import "@uma/core/contracts/common/implementation/Testable.sol";
 import "@uma/core/contracts/common/implementation/Lockable.sol";
 
-import "@uma/core/contracts/oracle/interfaces/FinderInterface.sol";
-import "@uma/core/contracts/oracle/interfaces/IdentifierWhitelistInterface.sol";
-import "@uma/core/contracts/oracle/interfaces/OptimisticOracleV2Interface.sol";
-import "@uma/core/contracts/oracle/implementation/ContractCreator.sol";
+import "@uma/core/contracts/data-verification-mechanism/interfaces/FinderInterface.sol";
+import "@uma/core/contracts/data-verification-mechanism/interfaces/IdentifierWhitelistInterface.sol";
+import "@uma/core/contracts/optimistic-oracle-v2/interfaces/OptimisticOracleV2Interface.sol";
+import "@uma/core/contracts/data-verification-mechanism/implementation/ContractCreator.sol";
 
 /**
  * @title Optimistic Token Deposit Box
